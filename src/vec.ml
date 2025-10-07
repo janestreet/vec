@@ -19,7 +19,6 @@ module Arr_impl = struct
   ;;
 
   let[@inline] get_mono t i = get (unwrap t) i
-  let[@inline] get (type a) (t : a t) i : a = get_mono t i |> Obj.Expert.obj
 
   let[@inline always] unsafe_set (type a) (t : a t) i (element : a) =
     unsafe_set (unwrap t) i (Obj.repr element)
@@ -42,12 +41,201 @@ module Arr_impl = struct
 
   let[@inline] copy t = wrap (copy (unwrap t))
 
-  let[@inline] init (type a) n ~(f : int -> a @@ local) : a t =
+  let[@inline] init (type a) n ~(f : (int -> a) @ local) : a t =
     wrap (init n ~f:(fun i -> f i |> Obj.repr)) [@nontail]
   ;;
 end
 
-module Arr_impl__bits64 = struct
+module Array = struct
+  include Array
+
+  let%template[@kind k = value] [@inline] unsafe_clear_if_pointer
+    (type a : k)
+    (t : a array)
+    i
+    =
+    let e = unsafe_get t i in
+    let e = Obj.repr e in
+    if not (Obj.is_int e)
+    then (
+      let e : a = Obj.magic 0 in
+      unsafe_set t i e)
+  ;;
+
+  let%template[@kind k = (value & value)] [@inline] unsafe_clear_if_pointer
+    (type a : k)
+    (t : a array)
+    i
+    =
+    let e = unsafe_get t i in
+    let #(a1, a2) : #(Obj.t * Obj.t) = Obj.magic e in
+    if not (Obj.is_int a1 && Obj.is_int a2)
+    then (
+      let e : a = Obj.magic #(Obj.repr 0, Obj.repr 0) in
+      unsafe_set t i e)
+  ;;
+
+  let%template[@kind k = (value & value & value)] [@inline] unsafe_clear_if_pointer
+    (type a : k)
+    (t : a array)
+    i
+    =
+    let e = unsafe_get t i in
+    let #(a1, a2, a3) : #(Obj.t * Obj.t * Obj.t) = Obj.magic e in
+    if not (Obj.is_int a1 && Obj.is_int a2 && Obj.is_int a3)
+    then (
+      let e : a = Obj.magic #(Obj.repr 0, Obj.repr 0, Obj.repr 0) in
+      unsafe_set t i e)
+  ;;
+
+  let%template[@kind k = (value & value & value & value)] [@inline] unsafe_clear_if_pointer
+    (type a : k)
+    (t : a array)
+    i
+    =
+    let e = unsafe_get t i in
+    let #(a1, a2, a3, a4) : #(Obj.t * Obj.t * Obj.t * Obj.t) = Obj.magic e in
+    if not (Obj.is_int a1 && Obj.is_int a2 && Obj.is_int a3 && Obj.is_int a4)
+    then (
+      let e : a = Obj.magic #(Obj.repr 0, Obj.repr 0, Obj.repr 0, Obj.repr 0) in
+      unsafe_set t i e)
+  ;;
+
+  let%template[@kind k = immediate64] [@inline] unsafe_clear_if_pointer
+    (type a : k)
+    (t : a array)
+    i
+    =
+    match Base.Int63.Private.repr with
+    | Int -> ()
+    | Int64 -> (unsafe_clear_if_pointer [@kind value]) t i
+  ;;
+
+  let%template[@kind k = (immediate64 & immediate64)] [@inline] unsafe_clear_if_pointer
+    (type a : k)
+    (t : a array)
+    i
+    =
+    match Base.Int63.Private.repr with
+    | Int -> ()
+    | Int64 -> (unsafe_clear_if_pointer [@kind value & value]) t i
+  ;;
+
+  let%template[@kind k = (immediate64 & immediate64 & immediate64)] [@inline] unsafe_clear_if_pointer
+    (type a : k)
+    (t : a array)
+    i
+    =
+    match Base.Int63.Private.repr with
+    | Int -> ()
+    | Int64 -> (unsafe_clear_if_pointer [@kind value & value & value]) t i
+  ;;
+
+  let%template[@kind k = (immediate64 & immediate64 & immediate64 & immediate64)]
+              [@inline] unsafe_clear_if_pointer
+    (type a : k)
+    (t : a array)
+    i
+    =
+    match Base.Int63.Private.repr with
+    | Int -> ()
+    | Int64 -> (unsafe_clear_if_pointer [@kind value & value & value & value]) t i
+  ;;
+
+  let%template[@kind k = (value & value, immediate64 & immediate64)] unsafe_create_uninitialized
+    (type a : k)
+    ~len
+    : a t
+    =
+    let v : a = Obj.magic #(0, 0) in
+    create ~len v
+  ;;
+
+  let%template[@kind k = (value & value & value, immediate64 & immediate64 & immediate64)] unsafe_create_uninitialized
+    (type a : k)
+    ~len
+    : a t
+    =
+    let v : a = Obj.magic #(0, 0, 0) in
+    create ~len v
+  ;;
+
+  let%template[@kind
+                k
+                = ( value & value & value & value
+                  , immediate64 & immediate64 & immediate64 & immediate64 )] unsafe_create_uninitialized
+    (type a : k)
+    ~len
+    : a t
+    =
+    let v : a = Obj.magic #(0, 0, 0, 0) in
+    create ~len v
+  ;;
+
+  let%template[@kind k = immediate64] unsafe_create_uninitialized (type a : k) ~len : a t =
+    let v : a = Obj.magic 0 in
+    create ~len v
+  ;;
+end
+
+module%template
+  [@kind
+    k
+    = ( immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )] Arr_impl =
+struct
+  open Array
+
+  type ('a : k) t = 'a Array.t
+
+  let[@inline] unsafe_create_uninitialized ~len =
+    (unsafe_create_uninitialized [@kind k]) ~len
+  ;;
+
+  let init len ~f =
+    let t = (unsafe_create_uninitialized [@kind k]) ~len in
+    for i = 0 to len - 1 do
+      unsafe_set t i (f i)
+    done;
+    t
+  ;;
+
+  let[@inline] unsafe_get (t : _ t) i = unsafe_get t i
+  let[@inline] unsafe_set (t : _ t) i e = unsafe_set t i e
+
+  let unsafe_blit ~(src : _ t) ~src_pos ~(dst : _ t) ~dst_pos ~len =
+    let blit_one i = unsafe_set dst (dst_pos + i) (unsafe_get src (src_pos + i)) in
+    if phys_equal src dst && src_pos < dst_pos
+    then
+      for i = len - 1 downto 0 do
+        (blit_one [@inlined]) i
+      done
+    else
+      for i = 0 to len - 1 do
+        (blit_one [@inlined]) i
+      done
+  ;;
+
+  let copy t =
+    let t' = (unsafe_create_uninitialized [@kind k]) ~len:(length t) in
+    unsafe_blit ~src:t ~src_pos:0 ~dst:t' ~dst_pos:0 ~len:(length t);
+    t'
+  ;;
+
+  let[@inline] length t = length t
+  let get_mono = get
+
+  let[@inline] unsafe_clear_if_pointer (t : _ t) i =
+    (unsafe_clear_if_pointer [@kind k]) t i
+  ;;
+end
+
+module%template [@kind bits64] Arr_impl = struct
   include I64.Array
 
   type ('a : bits64) t = 'a I64.Array.t
@@ -59,7 +247,7 @@ module Arr_impl__bits64 = struct
   ;;
 end
 
-module Arr_impl__float32 = struct
+module%template [@kind float32] Arr_impl = struct
   include F32.Array
 
   type ('a : float32) t = 'a F32.Array.t
@@ -71,9 +259,23 @@ module Arr_impl__float32 = struct
   ;;
 end
 
-type 'a arr_impl = 'a Arr_impl.t
-type 'a arr_impl__float32 = 'a Arr_impl__float32.t
-type 'a arr_impl__bits64 = 'a Arr_impl__bits64.t
+[%%template
+[@@@kind.default
+  k
+  = ( value
+    , immediate64
+    , value & value
+    , immediate64 & immediate64
+    , value & value & value
+    , immediate64 & immediate64 & immediate64
+    , value & value & value & value
+    , immediate64 & immediate64 & immediate64 & immediate64
+    , float32
+    , bits64 )]
+
+open Arr_impl [@kind k]
+
+type 'a arr_impl = 'a t]
 
 external magic_32 : ('a : float32) -> ('b : float32) @@ portable = "%identity"
 external magic_64 : ('a : bits64) -> ('b : bits64) @@ portable = "%identity"
@@ -83,35 +285,150 @@ let sexp_of_out_of_range_element (type a) (a : a) =
   Sexp.Atom (sprintf "_%d" imm)
 ;;
 
-let sexp_of_out_of_range_element__float32 (type a : float32) (a : a) =
+let%template[@kind k = (value & value)] sexp_of_out_of_range_element (type a : k) (a : a) =
+  let #(imm1, imm2) : #(int * int) = Obj.magic a in
+  Sexp.Atom (sprintf "(_%d, _%d)" imm1 imm2)
+;;
+
+let%template[@kind k = (value & value & value)] sexp_of_out_of_range_element
+  (type a : k)
+  (a : a)
+  =
+  let #(imm1, imm2, imm3) : #(int * int * int) = Obj.magic a in
+  Sexp.Atom (sprintf "(_%d, _%d, _%d)" imm1 imm2 imm3)
+;;
+
+let%template[@kind k = (value & value & value & value)] sexp_of_out_of_range_element
+  (type a : k)
+  (a : a)
+  =
+  let #(imm1, imm2, imm3, imm4) : #(int * int * int * int) = Obj.magic a in
+  Sexp.Atom (sprintf "(_%d, _%d, _%d, _%d)" imm1 imm2 imm3 imm4)
+;;
+
+let%template[@kind k = (immediate64 & immediate64)] [@inline] sexp_of_out_of_range_element
+  (type a : k)
+  (a : a)
+  =
+  (sexp_of_out_of_range_element [@kind value & value]) a
+;;
+
+let%template[@kind k = immediate64] [@inline] sexp_of_out_of_range_element
+  (type a : k)
+  (a : a)
+  =
+  (sexp_of_out_of_range_element [@kind value]) a
+;;
+
+let%template[@kind k = (immediate64 & immediate64 & immediate64)] [@inline] sexp_of_out_of_range_element
+  (type a : k)
+  (a : a)
+  =
+  (sexp_of_out_of_range_element [@kind value & value & value]) a
+;;
+
+let%template[@kind k = (immediate64 & immediate64 & immediate64 & immediate64)] [@inline] sexp_of_out_of_range_element
+  (type a : k)
+  (a : a)
+  =
+  (sexp_of_out_of_range_element [@kind value & value & value & value]) a
+;;
+
+let%template[@kind float32] sexp_of_out_of_range_element (type a : float32) (a : a) =
   let imm : float32# = magic_32 a in
   Sexp.Atom [%string "_%{imm#F32}"]
 ;;
 
-let sexp_of_out_of_range_element__bits64 (type a : bits64) (a : a) =
+let%template[@kind bits64] sexp_of_out_of_range_element (type a : bits64) (a : a) =
   let imm : i64 = magic_64 a in
   Sexp.Atom [%string "_%{imm#I64}"]
 ;;
 
-let out_of_range_invariant element = assert (Obj.is_int element)
-let out_of_range_invariant__float32 _element = ()
-let out_of_range_invariant__bits64 _element = ()
+let out_of_range_invariant (type a : value) (element : a) =
+  assert (Obj.repr element |> Obj.is_int)
+;;
+
+let%template[@kind k = (value & value)] out_of_range_invariant (type a : k) (e : a) =
+  let #(a1, a2) : #(Obj.t * Obj.t) = Obj.magic e in
+  out_of_range_invariant a1;
+  out_of_range_invariant a2
+;;
+
+let%template[@kind k = (value & value & value)] out_of_range_invariant
+  (type a : k)
+  (e : a)
+  =
+  let #(a1, a2, a3) : #(Obj.t * Obj.t * Obj.t) = Obj.magic e in
+  out_of_range_invariant a1;
+  out_of_range_invariant a2;
+  out_of_range_invariant a3
+;;
+
+let%template[@kind k = (value & value & value & value)] out_of_range_invariant
+  (type a : k)
+  (e : a)
+  =
+  let #(a1, a2, a3, a4) : #(Obj.t * Obj.t * Obj.t * Obj.t) = Obj.magic e in
+  out_of_range_invariant a1;
+  out_of_range_invariant a2;
+  out_of_range_invariant a3;
+  out_of_range_invariant a4
+;;
+
+let%template[@kind k = immediate64] [@inline] out_of_range_invariant (type a : k) (e : a) =
+  (out_of_range_invariant [@kind value]) e
+;;
+
+let%template[@kind k = (immediate64 & immediate64)] [@inline] out_of_range_invariant
+  (type a : k)
+  (e : a)
+  =
+  (out_of_range_invariant [@kind value & value]) e
+;;
+
+let%template[@kind k = (immediate64 & immediate64 & immediate64)] [@inline] out_of_range_invariant
+  (type a : k)
+  (e : a)
+  =
+  (out_of_range_invariant [@kind value & value & value]) e
+;;
+
+let%template[@kind k = (immediate64 & immediate64 & immediate64 & immediate64)] [@inline] out_of_range_invariant
+  (type a : k)
+  (e : a)
+  =
+  (out_of_range_invariant [@kind value & value & value & value]) e
+;;
+
+let%template[@kind float32] out_of_range_invariant _element = ()
+let%template[@kind bits64] out_of_range_invariant _element = ()
 
 module With_integer_index = struct
   (* Kernel hides away Obj-handling. *)
 
   module Kernel : sig @@ portable
     [%%template:
-    [@@@kind.default k = (float32, bits64, value)]
+    [@@@kind.default
+      k
+      = ( float32
+        , bits64
+        , immediate64
+        , value & value
+        , immediate64 & immediate64
+        , value & value & value
+        , immediate64 & immediate64 & immediate64
+        , value & value & value & value
+        , immediate64 & immediate64 & immediate64 & immediate64
+        , value )]
 
     type ('a : k) t : mutable_data with 'a
 
-    val length : local_ (_ t[@kind k]) -> int
-    val capacity : (_ t[@kind k]) -> int
+    val length : local_ (_ t[@kind k]) -> int [@@zero_alloc]
+    val capacity : (_ t[@kind k]) -> int [@@zero_alloc]
     val create : ?initial_capacity:int -> unit -> (_ t[@kind k])
     val unsafe_create_uninitialized : len:int -> ('a t[@kind k])
     val init : int -> f:local_ (int -> 'a) -> ('a t[@kind k])
-    val unsafe_get : ('a t[@kind k]) -> int -> 'a
+    val unsafe_get : ('a t[@kind k]) @ m -> int -> 'a [@@mode m = (local, global)]
     val unsafe_set : ('a t[@kind k]) -> int -> 'a -> unit
 
     val unsafe_blit
@@ -132,7 +449,19 @@ module With_integer_index = struct
 
     module With_structure_details : sig
       type%template nonrec 'a t = ('a t[@kind k])
-      [@@deriving sexp_of] [@@kind k = (float32, bits64, value)]
+      [@@deriving sexp_of]
+      [@@kind
+        k
+        = ( float32
+          , bits64
+          , value
+          , immediate64
+          , value & value
+          , immediate64 & immediate64
+          , value & value & value
+          , immediate64 & immediate64 & immediate64
+          , value & value & value & value
+          , immediate64 & immediate64 & immediate64 & immediate64 )]
     end
 
     val unsafe_set_imm : ('a : immediate64). 'a t -> int -> 'a -> unit
@@ -145,7 +474,18 @@ module With_integer_index = struct
     val sort : ?pos:int -> ?len:int -> 'a t -> compare:('a -> 'a -> int) -> unit
   end = struct
     [%%template
-    [@@@kind.default k = (float32, bits64, value)]
+    [@@@kind.default
+      k
+      = ( float32
+        , bits64
+        , value
+        , immediate64
+        , value & value
+        , immediate64 & immediate64
+        , value & value & value
+        , immediate64 & immediate64 & immediate64
+        , value & value & value & value
+        , immediate64 & immediate64 & immediate64 & immediate64 )]
 
     module [@kind] Arr = Arr_impl [@kind k]
 
@@ -190,6 +530,7 @@ module With_integer_index = struct
 
     let[@inline always] unsafe_get (type a : k) (t : (a t[@kind k])) i : a =
       Arr.unsafe_get t.arr i
+    [@@mode m = (local, global)]
     ;;
 
     let[@inline always] unsafe_set (type a : k) (t : (a t[@kind k])) i (element : a) =
@@ -230,7 +571,18 @@ module With_integer_index = struct
 
     module With_structure_details = struct
       [%%template
-      [@@@kind.default k = (float32, bits64, value)]
+      [@@@kind.default
+        k
+        = ( float32
+          , bits64
+          , value
+          , immediate64
+          , value & value
+          , immediate64 & immediate64
+          , value & value & value
+          , immediate64 & immediate64 & immediate64
+          , value & value & value & value
+          , immediate64 & immediate64 & immediate64 & immediate64 )]
 
       type nonrec 'a t = ('a t[@kind k])
 
@@ -239,7 +591,7 @@ module With_integer_index = struct
         let module Arr = Arr_impl [@kind k] in
         let elements =
           Uniform_array.init (Arr.length arr) ~f:(fun i ->
-            let element = Arr.get arr i in
+            let element = Arr.unsafe_get arr i in
             (* Only the first [length] elements can safely be given to [sexp_of_a]. *)
             if i < length
             then element |> sexp_of_a
@@ -249,7 +601,18 @@ module With_integer_index = struct
       ;;]
     end
 
-    let%template[@kind k = (float32, bits64, value)] invariant
+    let%template[@kind
+                  k
+                  = ( float32
+                    , bits64
+                    , value
+                    , immediate64
+                    , value & value
+                    , immediate64 & immediate64
+                    , value & value & value
+                    , immediate64 & immediate64 & immediate64
+                    , value & value & value & value
+                    , immediate64 & immediate64 & immediate64 & immediate64 )] invariant
       (type a : k)
       (a_inv : a -> unit)
       (t : (a t[@kind k]))
@@ -271,19 +634,51 @@ module With_integer_index = struct
             [%message
               "length shouldn't be more than capacity" (length : int) (capacity : int)];
         for pos = 0 to length - 1 do
-          a_inv (Arr.get arr pos)
+          a_inv (Arr.unsafe_get arr pos)
         done;
         for pos = length to capacity - 1 do
           Arr.get_mono arr pos |> (out_of_range_invariant [@kind k])
         done)
     ;;
 
-    let[@inline always] unsafe_clear_pointer_at t pos =
-      Arr.unsafe_clear_if_pointer t.arr pos
+    let[@inline always] unsafe_clear_pointer_at (t : _ t) pos =
+      Arr_impl.unsafe_clear_if_pointer t.arr pos
     ;;
 
-    let[@inline always] unsafe_clear_pointer_at__float32 (_ : _ t__float32) _ : unit = ()
-    let[@inline always] unsafe_clear_pointer_at__bits64 (_ : _ t__bits64) _ : unit = ()
+    let%template[@inline always]
+                [@kind
+                  k
+                  = ( immediate64
+                    , value & value
+                    , immediate64 & immediate64
+                    , value & value & value
+                    , immediate64 & immediate64 & immediate64
+                    , value & value & value & value
+                    , immediate64 & immediate64 & immediate64 & immediate64 )] unsafe_clear_pointer_at
+      (t : (_ t[@kind k]))
+      pos
+      =
+      let module Arr_impl = Arr_impl [@kind k] in
+      Arr_impl.unsafe_clear_if_pointer t.arr pos
+    ;;
+
+    let%template[@inline always] [@kind float32] unsafe_clear_pointer_at
+      (_ : (_ t[@kind float32]))
+      _
+      : unit
+      =
+      ()
+    ;;
+
+    let%template[@inline always] [@kind bits64] unsafe_clear_pointer_at
+      (_ : (_ t[@kind bits64]))
+      _
+      : unit
+      =
+      ()
+    ;;
+
+    module Arr = Arr_impl
 
     let sort (type a) ?pos ?len t ~(compare : a -> a -> int) =
       let compare : Obj.t -> Obj.t -> int = Obj.magic compare in
@@ -309,7 +704,18 @@ module With_integer_index = struct
   include Kernel
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let is_sorted t ~compare =
     (* This is a copy-paste from [Array.is_sorted]. *)
@@ -319,6 +725,19 @@ module With_integer_index = struct
       let elt_i = (unsafe_get [@kind k]) t !i in
       let elt_i_minus_1 = (unsafe_get [@kind k]) t (!i - 1) in
       if compare elt_i_minus_1 elt_i > 0 then result := false;
+      decr i
+    done;
+    !result
+  ;;
+
+  let is_sorted_strictly t ~compare =
+    (* This is a copy-paste from [Array.is_sorted_strictly]. *)
+    let i = ref ((length [@kind k]) t - 1) in
+    let result = ref true in
+    while !i > 0 && !result do
+      let elt_i = (unsafe_get [@kind k]) t !i in
+      let elt_i_minus_1 = (unsafe_get [@kind k]) t (!i - 1) in
+      if compare elt_i_minus_1 elt_i >= 0 then result := false;
       decr i
     done;
     !result
@@ -332,7 +751,18 @@ module With_integer_index = struct
     end)
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let next_free_index = (length [@kind k])
 
@@ -376,13 +806,28 @@ module With_integer_index = struct
     if i < 0 || i >= length t then None else exclave_ Some { global = unsafe_get t i }
   ;;
 
+  let maybe_get_or_null t i =
+    if i < 0 || i >= length t then Null else This (unsafe_get t i)
+  ;;
+
   let set_imm (type a : immediate64) (t : a t) i (element : a) : unit =
     check_index t i ~op:"set_imm";
     unsafe_set_imm t i element
   ;;
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let[@inline always] push_back__we_know_we_have_space t element =
     let length = (length [@kind k]) t in
@@ -421,7 +866,18 @@ module With_integer_index = struct
   ;;
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let remove_exn t i =
     if i < 0 || i >= (length [@kind k]) t
@@ -465,7 +921,18 @@ module With_integer_index = struct
   ;;
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let[@inline always] pop_back_unit_exn t =
     let pos = (max_index [@kind k]) t in
@@ -527,7 +994,18 @@ module With_integer_index = struct
   ;;
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let iteri t ~f =
     for i = 0 to (max_index [@kind k]) t do
@@ -540,6 +1018,17 @@ module With_integer_index = struct
       f ((unsafe_get [@kind k]) t i)
     done
   ;;]
+
+  let rec iter_until' t ~f ~finish ~max_index i =
+    if i > max_index
+    then finish ()
+    else (
+      match (f (unsafe_get t i) : _ Continue_or_stop.t) with
+      | Stop s -> s
+      | Continue () -> iter_until' t ~f ~finish ~max_index (i + 1))
+  ;;
+
+  let iter_until t ~f ~finish = iter_until' t ~f ~finish ~max_index:(max_index t) 0
 
   let to_list t =
     let result = ref [] in
@@ -638,7 +1127,18 @@ module With_integer_index = struct
   ;;
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let foldi t ~init ~f =
     let r = ref init in
@@ -665,6 +1165,19 @@ module With_integer_index = struct
         aux t (i + 1) ~acc ~f)
     in
     aux t 0 ~acc ~f
+  ;;
+
+  let rec foldi_until' t ~f ~acc ~finish ~max_index i =
+    if i > max_index
+    then finish acc
+    else (
+      match (f i acc ((unsafe_get [@kind k]) t i) : _ Continue_or_stop.t) with
+      | Stop s -> s
+      | Continue acc -> (foldi_until' [@kind k]) t ~f ~max_index (i + 1) ~acc ~finish)
+  ;;
+
+  let foldi_until t ~init ~f ~finish =
+    (foldi_until' [@kind k]) t ~f ~acc:init ~finish ~max_index:((max_index [@kind k]) t) 0
   ;;]
 
   include%template Blit.Make1 [@modality portable] (struct
@@ -681,7 +1194,17 @@ module With_integer_index = struct
     end)
 
   [%%template
-  [@@@kind.default k = (float32, bits64)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   (* hand write for lack of a functor *)
   let sub t ~pos ~len =
@@ -708,7 +1231,18 @@ module With_integer_index = struct
   ;;]
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   (** Returns the length of the longest prefix for which [f] is true. *)
   let take_while_len (type a : k) (t : (a t[@kind k])) ~(local_ f) : int =
@@ -727,7 +1261,18 @@ module With_integer_index = struct
 
   module Inplace = struct
     [%%template
-    [@@@kind.default k = (float32, bits64, value)]
+    [@@@kind.default
+      k
+      = ( float32
+        , bits64
+        , value
+        , immediate64
+        , value & value
+        , immediate64 & immediate64
+        , value & value & value
+        , immediate64 & immediate64 & immediate64
+        , value & value & value & value
+        , immediate64 & immediate64 & immediate64 & immediate64 )]
 
     let sub t ~pos ~len =
       Ordered_collection_common.check_pos_len_exn
@@ -770,21 +1315,34 @@ module With_integer_index = struct
   end
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
-  let rec forall2__same_length t1 t2 ~f i length =
+  let rec forall2__same_length (t1 @ m) (t2 @ m) ~f i length =
     if i >= length
     then true
     else
-      f ((unsafe_get [@kind k]) t1 i) ((unsafe_get [@kind k]) t2 i)
-      && (forall2__same_length [@kind k]) t1 t2 ~f (i + 1) length
+      f ((unsafe_get [@mode m] [@kind k]) t1 i) ((unsafe_get [@mode m] [@kind k]) t2 i)
+      && (forall2__same_length [@mode m] [@kind k]) t1 t2 ~f (i + 1) length
+  [@@mode m = (local, global)]
   ;;
 
-  let equal equal t t' =
+  let equal equal (t @ m) (t' @ m) =
     let length' = (length [@kind k]) t in
     if length' <> (length [@kind k]) t'
     then false
-    else (forall2__same_length [@kind k]) t t' ~f:equal 0 length'
+    else (forall2__same_length [@mode m] [@kind k]) t t' ~f:equal 0 length' [@nontail]
+  [@@mode m = (local, global)]
   ;;
 
   let clear (type a : k) (t : (a t[@kind k])) =
@@ -794,7 +1352,18 @@ module With_integer_index = struct
   let clear_imm (t : 'a t) = if length t > 0 then shrink_to_imm t ~len:0
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let sexp_of_t (type a : k) (sexp_of_a : a -> Sexp.t) t =
     Array.init ((length [@kind k]) t) ~f:(fun i -> sexp_of_a ((unsafe_get [@kind k]) t i))
@@ -831,7 +1400,17 @@ module With_integer_index = struct
   (* Reimplemented for layouts *)
 
   [%%template
-  [@@@kind.default k = (float32, bits64)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let count t ~f =
     (fold [@kind k]) t ~init:0 ~f:(fun n a -> if f a then n + 1 else n) [@nontail]
@@ -864,7 +1443,18 @@ module With_integer_index = struct
   let[@inline always] raise__not_found () = raise__not_found () [@nontail]
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let rec find_exn' t ~f ~max_index i =
     if i > max_index
@@ -969,24 +1559,39 @@ module With_integer_index = struct
   let to_array t = Arr.init ((length [@kind k]) t) ~f:((unsafe_get [@kind k]) t)]
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let t_of_sexp a_of_sexp t =
     let arr = [%of_sexp: Sexp.t array] t in
     (init [@kind k]) (Array.length arr) ~f:(fun i -> Array.unsafe_get arr i |> a_of_sexp)
   ;;
 
-  let compare cmp t1 t2 =
+  let compare cmp (t1 @ m) (t2 @ m) =
     let len1 = (length [@kind k]) t1 in
     let len2 = (length [@kind k]) t2 in
     let min_len = Int.min len1 len2 in
     let result = ref 0 in
     let i = ref 0 in
     while !i < min_len && !result = 0 do
-      result := cmp ((unsafe_get [@kind k]) t1 !i) ((unsafe_get [@kind k]) t2 !i);
+      result
+      := cmp
+           ((unsafe_get [@mode m] [@kind k]) t1 !i)
+           ((unsafe_get [@mode m] [@kind k]) t2 !i);
       i := !i + 1
     done;
     if !result = 0 then Int.compare len1 len2 else !result
+  [@@mode m = (local, global)]
   ;;
 
   let unsafe_swap t i j =
@@ -1007,9 +1612,6 @@ module With_integer_index = struct
     (pop_back_exn [@kind k]) t
   ;;]
 
-  let t__float32_of_sexp = t_of_sexp__float32
-  let t__bits64_of_sexp = t_of_sexp__bits64
-
   let to_iarray t =
     (to_array [@inlined hint]) t |> unsafe_iarray_of_array__promise_no_mutation
   ;;
@@ -1022,7 +1624,7 @@ module With_integer_index = struct
 
   module Stable = struct
     module V1 = struct
-      type nonrec 'a t = 'a t [@@deriving compare, sexp]
+      type nonrec 'a t = 'a t [@@deriving compare ~localize, sexp]
 
       include%template Bin_prot.Utils.Make_iterable_binable1 [@modality portable] (struct
           type nonrec 'a t = 'a t
@@ -1033,7 +1635,7 @@ module With_integer_index = struct
           ;;
 
           let module_name = Some "Vec"
-          let init ~len ~next = init len ~f:(fun _ -> next ())
+          let init ~len ~next = init len ~f:(fun _ -> next ()) [@nontail]
           let iter = iter
           let length = length
         end)
@@ -1067,62 +1669,103 @@ module type S = Vec_intf.S
 module%template.portable Make (M : Intable.S) = struct
   include With_integer_index
 
+  let[@inline always] [@zero_alloc] to_int_exn index =
+    (M.to_int_exn [@zero_alloc assume]) index
+  ;;
+
+  let[@inline always] [@zero_alloc] of_int_exn index =
+    (M.of_int_exn [@zero_alloc assume]) index
+  ;;
+
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
-  let[@inline always] unsafe_get t index = (unsafe_get [@kind k]) t (M.to_int_exn index)
-  let get t index = (get [@kind k]) t (M.to_int_exn index)]
+  let[@inline always] unsafe_get t index = (unsafe_get [@kind k]) t (to_int_exn index)
+  let get t index = (get [@kind k]) t (to_int_exn index)]
 
-  let maybe_get t index = maybe_get t (M.to_int_exn index)
-  let maybe_get_local t index = exclave_ maybe_get_local t (M.to_int_exn index)
+  let maybe_get t index = maybe_get t (to_int_exn index)
+  let maybe_get_local t index = exclave_ maybe_get_local t (to_int_exn index)
+  let maybe_get_or_null t index = maybe_get_or_null t (to_int_exn index)
 
   let[@inline always] unsafe_set_imm t index x : unit =
-    unsafe_set_imm t (M.to_int_exn index) x
+    unsafe_set_imm t (to_int_exn index) x
   ;;
 
-  let set_imm t index x : unit = set_imm t (M.to_int_exn index) x
+  let set_imm t index x : unit = set_imm t (to_int_exn index) x
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let[@inline always] unsafe_set t index x : unit =
-    (unsafe_set [@kind k]) t (M.to_int_exn index) x
+    (unsafe_set [@kind k]) t (to_int_exn index) x
   ;;
 
-  let set t index x : unit = (set [@kind k]) t (M.to_int_exn index) x
-  let next_free_index t = (next_free_index [@kind k]) t |> M.of_int_exn
+  let set t index x : unit = (set [@kind k]) t (to_int_exn index) x
+  let next_free_index t = (next_free_index [@kind k]) t |> of_int_exn
 
   let foldi t ~init ~f =
     (foldi [@kind k] [@inlined hint]) t ~init ~f:(fun [@inline] int accum x ->
-      f (M.of_int_exn int) accum x)
+      f (of_int_exn int) accum x)
     [@nontail]
   ;;
 
   let foldi_local_accum t ~init ~f = exclave_
-    (foldi_local_accum [@kind k] [@inlined hint]) t ~init ~f:(fun [@inline] int accum x ->
-      exclave_ f (M.of_int_exn int) accum x)
+    (foldi_local_accum [@kind k] [@inlined hint])
+      t
+      ~init
+      ~f:(fun [@inline] int accum x -> exclave_ f (of_int_exn int) accum x)
     [@nontail]
+  ;;
+
+  let foldi_until t ~init ~f ~finish =
+    (foldi_until [@kind k] [@inlined hint])
+      t
+      ~init
+      ~f:(fun [@inline] int accum x -> f (of_int_exn int) accum x)
+      ~finish [@nontail]
   ;;
 
   let iteri t ~f =
-    (iteri [@kind k] [@inlined hint]) t ~f:(fun [@inline] int x -> f (M.of_int_exn int) x)
+    (iteri [@kind k] [@inlined hint]) t ~f:(fun [@inline] int x -> f (of_int_exn int) x)
     [@nontail]
   ;;
 
-  let push_back_index t element = (push_back_index [@kind k]) t element |> M.of_int_exn]
+  let push_back_index t element = (push_back_index [@kind k]) t element |> of_int_exn]
 
-  let push_back_index_imm t e = push_back_index_imm t e |> M.of_int_exn
+  let push_back_index_imm t e = push_back_index_imm t e |> of_int_exn
 
   let findi t ~f =
     match (findi [@inlined hint]) t ~f with
-    | Some (i, a) -> Some (M.of_int_exn i, a)
+    | Some (i, a) -> Some (of_int_exn i, a)
     | None -> None
   ;;
 
   let to_alist t =
     (* We could do:
        {[
-         to_alist t |> List.map ~f:(fun (i, x) -> M.of_int_exn i, x)
+         to_alist t |> List.map ~f:(fun (i, x) -> of_int_exn i, x)
        ]}
 
        at the expense of an extra allocation. This is a bit more copy-pasty,
@@ -1130,52 +1773,80 @@ module%template.portable Make (M : Intable.S) = struct
     *)
     let result = ref [] in
     for i = max_index t downto 0 do
-      let m = M.of_int_exn i in
+      let m = of_int_exn i in
       result := (m, unsafe_get t m) :: !result
     done;
     !result
   ;;
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
   let grow_to_include t idx ~default =
-    (grow_to_include [@kind k]) t (M.to_int_exn idx) ~default
+    (grow_to_include [@kind k]) t (to_int_exn idx) ~default
   ;;
 
   let grow_to' t ~len ~default =
-    (grow_to' [@kind k]) t ~len ~default:(fun [@inline] idx -> default (M.of_int_exn idx))
+    (grow_to' [@kind k]) t ~len ~default:(fun [@inline] idx -> default (of_int_exn idx))
   ;;
 
   let grow_to_include' t idx ~default =
-    (grow_to_include' [@kind k]) t (M.to_int_exn idx) ~default:(fun [@inline] idx ->
-      default (M.of_int_exn idx))
+    (grow_to_include' [@kind k]) t (to_int_exn idx) ~default:(fun [@inline] idx ->
+      default (of_int_exn idx))
   ;;]
 
   module Inplace = struct
     include Inplace
 
     [%%template
-    [@@@kind.default k = (float32, bits64, value)]
+    [@@@kind.default
+      k
+      = ( float32
+        , bits64
+        , value
+        , immediate64
+        , value & value
+        , immediate64 & immediate64
+        , value & value & value
+        , immediate64 & immediate64 & immediate64
+        , value & value & value & value
+        , immediate64 & immediate64 & immediate64 & immediate64 )]
 
-    let sub t ~pos ~len = (sub [@kind k]) t ~pos:(M.to_int_exn pos) ~len
+    let sub t ~pos ~len = (sub [@kind k]) t ~pos:(to_int_exn pos) ~len
 
     let mapi t ~f =
-      (mapi [@kind k]) t ~f:(fun [@inline] int x -> f (M.of_int_exn int) x) [@nontail]
+      (mapi [@kind k]) t ~f:(fun [@inline] int x -> f (of_int_exn int) x) [@nontail]
     ;;]
   end
 
   [%%template
-  [@@@kind.default k = (float32, bits64, value)]
+  [@@@kind.default
+    k
+    = ( float32
+      , bits64
+      , value
+      , immediate64
+      , value & value
+      , immediate64 & immediate64
+      , value & value & value
+      , immediate64 & immediate64 & immediate64
+      , value & value & value & value
+      , immediate64 & immediate64 & immediate64 & immediate64 )]
 
-  let swap t index1 index2 =
-    (swap [@kind k]) t (M.to_int_exn index1) (M.to_int_exn index2)
-  ;;
+  let swap t index1 index2 = (swap [@kind k]) t (to_int_exn index1) (to_int_exn index2)
+  let swap_to_last_and_pop t index = (swap_to_last_and_pop [@kind k]) t (to_int_exn index)]
 
-  let swap_to_last_and_pop t index =
-    (swap_to_last_and_pop [@kind k]) t (M.to_int_exn index)
-  ;;]
-
-  let swap_to_last_and_pop_imm t index = swap_to_last_and_pop_imm t (M.to_int_exn index)
+  let swap_to_last_and_pop_imm t index = swap_to_last_and_pop_imm t (to_int_exn index)
 end
 [@@inline]
