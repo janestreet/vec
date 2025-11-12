@@ -1,5 +1,5 @@
 open! Core
-open! Unboxed
+open! Import
 
 module type S = sig
   type index
@@ -38,6 +38,7 @@ module type S = sig
   val maybe_get : 'a t -> index -> 'a option
   val maybe_get_local : 'a t -> index -> local_ 'a Modes.Global.t option [@@zero_alloc]
   val maybe_get_or_null : 'a t -> index -> 'a or_null [@@zero_alloc]
+  val last : 'a t -> 'a or_null
 
   [%%template:
   [@@@kind.default
@@ -314,7 +315,16 @@ module type S = sig
     val map : ('a t[@kind k]) -> f:local_ ('a -> 'a) -> unit
 
     (** Same as [map], but [f] also takes the index. *)
-    val mapi : ('a t[@kind k]) -> f:local_ (index -> 'a -> 'a) -> unit]
+    val mapi : ('a t[@kind k]) -> f:local_ (index -> 'a -> 'a) -> unit
+
+    (** Removes adjacent duplicates in-place. The relative order of the other elements is
+        unaffected. The element kept from a run of duplicates is determined by
+        [which_to_keep], which defaults to [`First]. *)
+    val remove_consecutive_duplicates
+      :  ?which_to_keep:[ `First | `Last ]
+      -> ('a t[@kind k])
+      -> equal:local_ ('a -> 'a -> bool)
+      -> unit]
   end
 
   [%%template:
@@ -409,10 +419,6 @@ module type S = sig
   val unsafe_set_length : (_ t[@kind k]) -> int -> unit]
 
   val unsafe_set_imm : ('a : immediate64). 'a t -> index -> 'a -> unit
-
-  module Expert : sig
-    val unsafe_inner : 'a t -> Obj.t Uniform_array.t
-  end
 
   module Stable : sig
     module V1 : sig
