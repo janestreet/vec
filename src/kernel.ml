@@ -7,8 +7,8 @@ external magic_64 : ('a : bits64) -> ('b : bits64) @@ portable = "%identity"
 module Arr_impl = struct
   open Uniform_array
 
-  (* Safely exposes ['a t] as [mutable_data with 'a] even though
-     [Obj.t Uniform_array.t] has kind [value]. *)
+  (* Safely exposes ['a t] as [mutable_data with 'a] even though [Obj.t Uniform_array.t]
+     has kind [value]. *)
   type 'a t : mutable_data with 'a
 
   external wrap : Obj.t Uniform_array.t -> 'a t @@ portable = "%identity"
@@ -436,8 +436,8 @@ let[@kind] check_capacity capacity =
 ;;
 
 (* [initial_capacity] is mostly arbitrary, but it does make our array take one header
-       word + 7 data words = 8 words * 8 bytes = 64 bytes = one cacheline by default. (Of
-       course, there's no alignment guarantee.) *)
+   word + 7 data words = 8 words * 8 bytes = 64 bytes = one cacheline by default. (Of
+   course, there's no alignment guarantee.) *)
 let create ?(initial_capacity = 7) () =
   check_capacity initial_capacity;
   { arr = Arr.unsafe_create_uninitialized ~len:initial_capacity

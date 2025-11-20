@@ -118,7 +118,7 @@ module type S = sig
       , value & value & value & value
       , immediate64 & immediate64 & immediate64 & immediate64 )]
 
-  (** Finds the first 'a for which f is true **)
+  (** Finds the first 'a for which f is true *)
   val find_exn : ('a t[@kind k]) -> f:local_ ('a -> bool) -> 'a]
 
   (** [sort] uses constant heap space. To sort only part of the array, specify [pos] to be

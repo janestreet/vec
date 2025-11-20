@@ -189,8 +189,8 @@ module With_integer_index = struct
     if i < 0 || i >= (length [@kind k]) t
     then (raise__bad_index [@kind k]) t i ~op:"remove_exn";
     let new_length = (length [@kind k]) t - 1 in
-    (* As per the ocaml stdlib documentation, blitting with src and dst
-       overlapping is safe.
+    (* As per the ocaml stdlib documentation, blitting with src and dst overlapping is
+       safe.
        https://github.com/ocaml-flambda/flambda-backend/blob/main/ocaml/stdlib/array.mli#L143
     *)
     (unsafe_blit [@kind k])
@@ -409,8 +409,8 @@ module With_integer_index = struct
     !result
   ;;
 
-  (* Convert to a sequence but does not attempt to protect against modification
-     in the vec. *)
+  (* Convert to a sequence but does not attempt to protect against modification in the
+     vec. *)
   let to_sequence_mutable t =
     Sequence.unfold_step ~init:0 ~f:(fun i ->
       if i >= length t then Done else Yield { value = unsafe_get t i; state = i + 1 })
@@ -491,8 +491,8 @@ module With_integer_index = struct
       type nonrec 'a t = 'a t
 
       let create_like ~len _t =
-        (* Note that even though we [unsafe_create_uninitialized], every time this function
-           is called, the [Vec] is immediately blitted with valid values. *)
+        (* Note that even though we [unsafe_create_uninitialized], every time this
+           function is called, the [Vec] is immediately blitted with valid values. *)
         Kernel.unsafe_create_uninitialized ~len
       ;;
 
@@ -628,7 +628,8 @@ module With_integer_index = struct
         let new_length =
           match which_to_keep with
           | `First ->
-            (* src_idx iterates ahead and writes the new element to dest_idx when a new run starts. *)
+            (* src_idx iterates ahead and writes the new element to dest_idx when a new
+               run starts. *)
             let rec loop ~src_idx ~dest_idx ~curr_elt =
               match src_idx > max_idx with
               | true ->
@@ -749,7 +750,9 @@ module With_integer_index = struct
     !result
   ;;
 
-  let mem t a ~equal = (exists [@kind k] [@inlined hint]) t ~f:(equal a) [@nontail]]
+  let mem t a ~equal =
+    (exists [@kind k] [@inlined hint]) t ~f:(fun b -> equal a b) [@nontail]
+  ;;]
 
   let count t ~f = Container.count ~fold t ~f
   let sum module_ t ~f = Container.sum ~fold module_ t ~f
@@ -1121,8 +1124,8 @@ module%template.portable Make (M : Intable.S) = struct
          to_alist t |> List.map ~f:(fun (i, x) -> of_int_exn i, x)
        ]}
 
-       at the expense of an extra allocation. This is a bit more copy-pasty,
-       but avoids that.
+       at the expense of an extra allocation. This is a bit more copy-pasty, but avoids
+       that.
     *)
     let result = ref [] in
     for i = max_index t downto 0 do
