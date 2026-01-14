@@ -209,7 +209,8 @@ module type S = sig
   val findi : 'a t -> f:local_ ('a -> bool) -> (index * 'a) option
   val pop_back_imm_exn : ('a : immediate64). 'a t -> 'a [@@zero_alloc]
   val pop_back_unit_imm_exn : ('a : immediate64). 'a t -> unit [@@zero_alloc]
-  val peek_back : 'a t -> 'a option
+  val peek_back : 'a t -> 'a or_null
+  val pop_back : 'a t -> 'a or_null
 
   [%%template:
   [@@@kind.default

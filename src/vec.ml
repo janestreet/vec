@@ -212,7 +212,7 @@ module With_integer_index = struct
     (unsafe_peek_back_exn [@kind k]) t
   ;;]
 
-  let peek_back t = if length t <= 0 then None else Some (unsafe_peek_back_exn t)
+  let peek_back t = if length t <= 0 then Null else This (unsafe_peek_back_exn t)
 
   let[@inline always] pop_back_unit_imm_exn (type a : immediate64) (t : a t) =
     let pos = max_index t in
@@ -291,6 +291,12 @@ module With_integer_index = struct
       done;
       (unsafe_set_length [@kind k]) t len)
   ;;]
+
+  let pop_back t =
+    let e = peek_back t in
+    Or_null.iter e ~f:(fun _ -> pop_back_unit_exn t);
+    e
+  ;;
 
   let shrink_to_imm (type a : immediate64) (t : a t) ~len =
     if len < 0
