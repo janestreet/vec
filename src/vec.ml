@@ -453,31 +453,28 @@ module With_integer_index = struct
       , value & value & value & value
       , immediate64 & immediate64 & immediate64 & immediate64 )]
 
-  let foldi t ~init ~f =
-    let r = ref init in
-    for i = 0 to (max_index [@kind k]) t do
-      r := f i !r ((unsafe_get [@kind k]) t i)
-    done;
-    !r
+  let foldi t ~(init @ macc) ~(f : (int -> 'acc @ macc -> 'a -> 'acc @ macc) @ local) =
+    (let mutable r = init in
+     for i = 0 to (max_index [@kind k]) t do
+       ((r
+       <- f i r ((unsafe_get [@kind k]) t i))
+       [@exclave_if_local macc ~reasons:[ May_return_local ]])
+     done;
+     r)
+    [@exclave_if_local macc ~reasons:[ May_return_local ]]
+  [@@mode macc = (global, local)]
   ;;
 
-  let fold t ~init ~f =
-    let r = ref init in
-    for i = 0 to (max_index [@kind k]) t do
-      r := f !r ((unsafe_get [@kind k]) t i)
-    done;
-    !r
-  ;;
-
-  let foldi_local_accum t ~init:acc ~f = exclave_
-    let rec aux t i ~acc ~f = exclave_
-      if i >= (length [@kind k]) t
-      then acc
-      else (
-        let acc = f i acc ((unsafe_get [@kind k]) t i) in
-        aux t (i + 1) ~acc ~f)
-    in
-    aux t 0 ~acc ~f
+  let fold t ~(init @ macc) ~(f : ('acc @ macc -> 'a -> 'acc @ macc) @ local) =
+    (let mutable r = init in
+     for i = 0 to (max_index [@kind k]) t do
+       ((r
+       <- f r ((unsafe_get [@kind k]) t i))
+       [@exclave_if_local macc ~reasons:[ May_return_local ]])
+     done;
+     r)
+    [@exclave_if_local macc ~reasons:[ May_return_local ]]
+  [@@mode macc = (global, local)]
   ;;
 
   let rec foldi_until' t ~f ~acc ~finish ~max_index i =
@@ -1087,18 +1084,14 @@ module%template.portable Make (M : Intable.S) = struct
   let set t index x : unit = (set [@kind k]) t (to_int_exn index) x
   let next_free_index t = (next_free_index [@kind k]) t |> of_int_exn
 
-  let foldi t ~init ~f =
-    (foldi [@kind k] [@inlined hint]) t ~init ~f:(fun [@inline] int accum x ->
-      f (of_int_exn int) accum x)
-    [@nontail]
-  ;;
-
-  let foldi_local_accum t ~init ~f = exclave_
-    (foldi_local_accum [@kind k] [@inlined hint])
+  let foldi t ~(init @ macc) ~f =
+    (foldi [@kind k] [@mode macc] [@inlined hint])
       t
       ~init
-      ~f:(fun [@inline] int accum x -> exclave_ f (of_int_exn int) accum x)
-    [@nontail]
+      ~f:(fun [@inline] int accum x ->
+        f (of_int_exn int) accum x [@exclave_if_local macc ~reasons:[ May_return_local ]])
+    [@nontail] [@exclave_if_local macc ~reasons:[ May_return_local ]]
+  [@@mode macc = (global, local)]
   ;;
 
   let foldi_until t ~init ~f ~finish =

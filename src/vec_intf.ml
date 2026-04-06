@@ -80,7 +80,14 @@ module type S = sig
   val length : (_ t[@kind k]) -> int [@@zero_alloc]
   val is_empty : (_ t[@kind k]) -> bool [@@zero_alloc]
   val iter : ('a t[@kind k]) -> f:local_ ('a -> unit) -> unit
-  val fold : ('a t[@kind k]) -> init:'acc -> f:local_ ('acc -> 'a -> 'acc) -> 'acc
+
+  val fold
+    :  ('a t[@kind k])
+    -> init:'acc @ macc
+    -> f:('acc @ macc -> 'a -> 'acc @ macc) @ local
+    -> 'acc @ macc
+  [@@mode macc = (global, local)]
+
   val exists : ('a t[@kind k]) -> f:local_ ('a -> bool) -> bool
   val for_all : ('a t[@kind k]) -> f:local_ ('a -> bool) -> bool
   val count : ('a t[@kind k]) -> f:local_ ('a -> bool) -> int
@@ -100,6 +107,13 @@ module type S = sig
     -> dst_pos:int
     -> len:int
     -> unit]
+
+  val%template fold
+    :  'a t
+    -> init:'acc @ macc
+    -> f:('acc @ macc -> 'a -> 'acc @ macc) @ local
+    -> 'acc @ macc
+  [@@mode macc = local]
 
   val%template to_array : ('a t[@kind float32]) -> 'a F32.Array.t [@@kind k = float32]
   val%template to_array : ('a t[@kind bits64]) -> 'a I64.Array.t [@@kind k = bits64]
@@ -232,21 +246,16 @@ module type S = sig
 
   val foldi
     :  ('a t[@kind k])
-    -> init:'accum
-    -> f:local_ (index -> 'accum -> 'a -> 'accum)
-    -> 'accum
-
-  val foldi_local_accum
-    :  ('a t[@kind k])
-    -> init:local_ 'accum
-    -> f:local_ (index -> local_ 'accum -> 'a -> local_ 'accum)
-    -> local_ 'accum
+    -> init:'acc @ macc
+    -> f:(index -> 'acc @ macc -> 'a -> 'acc @ macc) @ local
+    -> 'acc @ macc
+  [@@mode macc = (global, local)]
 
   val foldi_until
     :  ('a t[@kind k])
-    -> init:'accum
-    -> f:local_ (index -> 'accum -> 'a -> ('accum, 'b) Continue_or_stop.t)
-    -> finish:('accum -> 'b)
+    -> init:'acc
+    -> f:local_ (index -> 'acc -> 'a -> ('acc, 'b) Continue_or_stop.t)
+    -> finish:('acc -> 'b)
     -> 'b
 
   val iteri : ('a t[@kind k]) -> f:local_ (index -> 'a -> unit) -> unit]

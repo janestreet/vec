@@ -417,7 +417,9 @@ let%template[@kind bits64] out_of_range_invariant _element = ()
     , value & value & value & value
     , immediate64 & immediate64 & immediate64 & immediate64 )]
 
-module [@kind] Arr = Arr_impl [@kind k]
+open struct
+  module [@kind] Arr = Arr_impl [@kind k]
+end
 
 type ('a : k) t =
   { mutable arr : 'a Arr.t
