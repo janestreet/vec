@@ -11,12 +11,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   type ('a : k) t : mutable_data with 'a
   [@@deriving compare ~localize, equal ~localize, sexp]
@@ -47,12 +50,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   (** Raises if the index is invalid. *)
   val set : ('a t[@kind k]) -> index -> 'a -> unit
@@ -63,18 +69,24 @@ module type S = sig
   include Container.S1 with type 'a t := 'a t
   include Blit.S1 with type 'a t := 'a t
 
+  val length : _ t -> int [@@zero_alloc]
+  val is_empty : _ t -> bool [@@zero_alloc]
+
   [%%template:
   [@@@kind.default
     k
     = ( float32
       , bits64
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   val mem : ('a t[@kind k]) -> 'a -> equal:local_ ('a -> 'a -> bool) -> bool
   val length : (_ t[@kind k]) -> int [@@zero_alloc]
@@ -125,12 +137,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   (** Finds the first 'a for which f is true *)
   val find_exn : ('a t[@kind k]) -> f:local_ ('a -> bool) -> 'a]
@@ -146,12 +161,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   val is_sorted : ('a t[@kind k]) -> compare:local_ ('a -> 'a -> int) -> bool
   val is_sorted_strictly : ('a t[@kind k]) -> compare:local_ ('a -> 'a -> int) -> bool]
@@ -165,12 +183,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   val next_free_index : ('a t[@kind k]) -> index
   val push_back : ('a t[@kind k]) -> 'a -> unit
@@ -186,12 +207,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   (** Grows the vec to the specified length if it is currently shorter. Sets all new
       indices to [default]. *)
@@ -214,7 +238,11 @@ module type S = sig
 
   (** [remove vec i] Removes the i-th element of the vector. This is not a fast
       implementation, and runs in O(N) time. (ie: it calls caml_modify under the hood) *)
-  val remove_exn : ('a t[@kind k]) -> int -> unit]
+  val remove_exn : ('a t[@kind k]) -> int -> unit
+
+  (** [insert_exn vec i x] adds x as the i-th element of the vector, moving subsequent
+      elements farther out (in O(N) time). *)
+  val insert_exn : ('a t[@kind k]) -> int -> 'a -> unit]
 
   (** Find the first element that satisfies [f]. If exists, remove the element from the
       vector and return it. This is not a fast implementation, and runs in O(N) time. *)
@@ -233,12 +261,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   val pop_back_exn : ('a t[@kind k]) -> 'a
   val pop_back_unit_exn : ('a t[@kind k]) -> unit
@@ -285,12 +316,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   (** [take_while t ~f] returns a fresh vec containing the longest prefix of [t] for which
       [f] is [true]. *)
@@ -304,12 +338,15 @@ module type S = sig
         , bits64
         , value
         , immediate64
-        , value & value
-        , immediate64 & immediate64
-        , value & value & value
-        , immediate64 & immediate64 & immediate64
-        , value & value & value & value
-        , immediate64 & immediate64 & immediate64 & immediate64 )]
+        , value_or_null & value_or_null
+        , immediate64_or_null & immediate64_or_null
+        , value_or_null & value_or_null & value_or_null
+        , immediate64_or_null & immediate64_or_null & immediate64_or_null
+        , value_or_null & value_or_null & value_or_null & value_or_null
+        , immediate64_or_null
+          & immediate64_or_null
+          & immediate64_or_null
+          & immediate64_or_null )]
 
     (** [sub] is like [Blit.sub], but modifies the vec in place. *)
     val sub : ('a t[@kind k]) -> pos:index -> len:int -> unit
@@ -344,12 +381,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   (** The number of elements we can hold without growing. *)
   val capacity : (_ t[@kind k]) -> int
@@ -370,12 +410,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   (** [copy t] returns a copy of [t], that is, a fresh vec containing the same elements as
       [t]. *)
@@ -401,12 +444,15 @@ module type S = sig
         , bits64
         , value
         , immediate64
-        , value & value
-        , immediate64 & immediate64
-        , value & value & value
-        , immediate64 & immediate64 & immediate64
-        , value & value & value & value
-        , immediate64 & immediate64 & immediate64 & immediate64 )]
+        , value_or_null & value_or_null
+        , immediate64_or_null & immediate64_or_null
+        , value_or_null & value_or_null & value_or_null
+        , immediate64_or_null & immediate64_or_null & immediate64_or_null
+        , value_or_null & value_or_null & value_or_null & value_or_null
+        , immediate64_or_null
+          & immediate64_or_null
+          & immediate64_or_null
+          & immediate64_or_null )]
     [@@deriving sexp_of]
   end
 
@@ -417,12 +463,15 @@ module type S = sig
       , bits64
       , value
       , immediate64
-      , value & value
-      , immediate64 & immediate64
-      , value & value & value
-      , immediate64 & immediate64 & immediate64
-      , value & value & value & value
-      , immediate64 & immediate64 & immediate64 & immediate64 )]
+      , value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & immediate64_or_null
+      , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null
+        & immediate64_or_null )]
 
   val unsafe_get : ('a t[@kind k]) -> index -> 'a
   val unsafe_set : ('a t[@kind k]) -> index -> 'a -> unit
