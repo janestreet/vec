@@ -13,6 +13,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -52,6 +53,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -80,6 +82,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -139,6 +142,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -163,6 +167,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -185,6 +190,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -209,6 +215,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -221,14 +228,14 @@ module type S = sig
       indices to [default]. *)
   val grow_to : ('a t[@kind k]) -> len:int -> default:'a -> unit
 
-  (** Equivalent to [grow_to t (index + 1) ~default]. *)
+  (** Equivalent to [grow_to t ~len:(index + 1) ~default]. *)
   val grow_to_include : ('a t[@kind k]) -> index -> default:'a -> unit
 
   (** Grows the vec to the specified length if it is currently shorter. Sets all new
       indices to [default idx]. *)
   val grow_to' : ('a t[@kind k]) -> len:int -> default:(index -> 'a) -> unit
 
-  (** Equivalent to [grow_to' t (index + 1) ~default]. *)
+  (** Equivalent to [grow_to' t ~len:(index + 1) ~default]. *)
   val grow_to_include' : ('a t[@kind k]) -> index -> default:(index -> 'a) -> unit
 
   (** Shortens the vec to the specified length if it is currently longer. Raises if
@@ -263,6 +270,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -283,11 +291,21 @@ module type S = sig
   [@@mode macc = (global, local)]
 
   val foldi_until
-    :  ('a t[@kind k])
-    -> init:'acc
-    -> f:local_ (index -> 'acc -> 'a -> ('acc, 'b) Continue_or_stop.t)
-    -> finish:('acc -> 'b)
-    -> 'b
+    : ('b : value_or_null).
+    ('a t[@kind k])
+    -> init:'acc @ m
+    -> f:(index -> 'acc @ m -> 'a -> ('acc, 'b) Continue_or_stop.t @ m) @ local
+    -> finish:('acc @ m -> 'b @ m) @ local
+    -> 'b @ m
+  [@@mode m = (global, local)]
+
+  val iter_until
+    : ('b : value_or_null).
+    ('a t[@kind k])
+    -> f:('a -> (unit, 'b) Continue_or_stop.t @ m) @ local
+    -> finish:(unit -> 'b @ m) @ local
+    -> 'b @ m
+  [@@mode m = (global, local)]
 
   val iteri : ('a t[@kind k]) -> f:local_ (index -> 'a -> unit) -> unit]
 
@@ -318,6 +336,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -340,6 +359,7 @@ module type S = sig
         , immediate64
         , value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null
+        , immediate64_or_null & value_or_null
         , value_or_null & value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null & immediate64_or_null
         , value_or_null & value_or_null & value_or_null & value_or_null
@@ -383,6 +403,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -412,6 +433,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -446,6 +468,7 @@ module type S = sig
         , immediate64
         , value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null
+        , immediate64_or_null & value_or_null
         , value_or_null & value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null & immediate64_or_null
         , value_or_null & value_or_null & value_or_null & value_or_null
@@ -465,6 +488,7 @@ module type S = sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null

@@ -21,6 +21,7 @@ type%template 'a arr_impl = 'a I64.Array.t [@@kind bits64]
     , immediate64
     , value_or_null & value_or_null
     , immediate64_or_null & immediate64_or_null
+    , immediate64_or_null & value_or_null
     , value_or_null & value_or_null & value_or_null
     , immediate64_or_null & immediate64_or_null & immediate64_or_null
     , value_or_null & value_or_null & value_or_null & value_or_null
@@ -67,6 +68,7 @@ module With_structure_details : sig
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null

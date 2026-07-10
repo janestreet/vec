@@ -13,6 +13,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -63,6 +64,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -136,6 +138,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -189,6 +192,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -257,6 +261,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -339,6 +344,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -357,18 +363,26 @@ module With_integer_index = struct
     for i = 0 to (max_index [@kind k]) t do
       f ((unsafe_get [@kind k]) t i)
     done
-  ;;]
-
-  let rec iter_until' t ~f ~finish ~max_index i =
-    if i > max_index
-    then finish ()
-    else (
-      match (f (unsafe_get t i) : _ Continue_or_stop.t) with
-      | Stop s -> s
-      | Continue () -> iter_until' t ~f ~finish ~max_index (i + 1))
   ;;
 
-  let iter_until t ~f ~finish = iter_until' t ~f ~finish ~max_index:(max_index t) 0
+  let[@mode m = (global, local)] rec iter_until' t ~f ~finish ~max_index i =
+    (if i > max_index
+     then finish ()
+     else (
+       match (f ((unsafe_get [@kind k]) t i) : _ Continue_or_stop.t) with
+       | Stop s -> s
+       | Continue () -> (iter_until' [@kind k] [@mode m]) t ~f ~finish ~max_index (i + 1)))
+    [@exclave_if_local m ~reasons:[ May_return_local ]]
+  ;;
+
+  let[@mode m = (global, local)] iter_until t ~f ~finish =
+    (iter_until' [@kind k] [@mode m])
+      t
+      ~f
+      ~finish
+      ~max_index:((max_index [@kind k]) t)
+      0 [@exclave_if_local m ~reasons:[ May_return_local ]]
+  ;;]
 
   let to_list t =
     let result = ref [] in
@@ -425,7 +439,7 @@ module With_integer_index = struct
     then unsafe_iarray_of_array__promise_no_mutation [||]
     else (
       let first_elem = unsafe_get t 0 in
-      if (not float_arrays_are_flat) && Obj.tag (Obj.repr first_elem) = Obj.double_tag
+      if float_arrays_are_flat && Obj.tag (Obj.repr first_elem) = Obj.double_tag
       then nonempty_vec_to_local_float_iarray_slow t ~length ~first_elem
       else (
         let non_float_array =
@@ -476,6 +490,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -508,17 +523,25 @@ module With_integer_index = struct
   [@@mode macc = (global, local)]
   ;;
 
-  let rec foldi_until' t ~f ~acc ~finish ~max_index i =
-    if i > max_index
-    then finish acc
-    else (
-      match (f i acc ((unsafe_get [@kind k]) t i) : _ Continue_or_stop.t) with
-      | Stop s -> s
-      | Continue acc -> (foldi_until' [@kind k]) t ~f ~max_index (i + 1) ~acc ~finish)
+  let[@mode m = (global, local)] rec foldi_until' t ~f ~acc ~finish ~max_index i =
+    (if i > max_index
+     then finish acc
+     else (
+       match (f i acc ((unsafe_get [@kind k]) t i) : _ Continue_or_stop.t) with
+       | Stop s -> s
+       | Continue acc ->
+         (foldi_until' [@kind k] [@mode m]) t ~f ~max_index (i + 1) ~acc ~finish))
+    [@exclave_if_local m ~reasons:[ May_return_local ]]
   ;;
 
-  let foldi_until t ~init ~f ~finish =
-    (foldi_until' [@kind k]) t ~f ~acc:init ~finish ~max_index:((max_index [@kind k]) t) 0
+  let[@mode m = (global, local)] foldi_until t ~init ~f ~finish =
+    (foldi_until' [@kind k] [@mode m])
+      t
+      ~f
+      ~acc:init
+      ~finish
+      ~max_index:((max_index [@kind k]) t)
+      0 [@exclave_if_local m ~reasons:[ May_return_local ]]
   ;;]
 
   include%template Blit.Make1 [@modality portable] (struct
@@ -542,6 +565,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -583,6 +607,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -616,6 +641,7 @@ module With_integer_index = struct
         , immediate64
         , value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null
+        , immediate64_or_null & value_or_null
         , value_or_null & value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null & immediate64_or_null
         , value_or_null & value_or_null & value_or_null & value_or_null
@@ -724,6 +750,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -764,6 +791,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -816,6 +844,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -863,6 +892,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -982,6 +1012,7 @@ module With_integer_index = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -1100,6 +1131,7 @@ module%template.portable Make (M : Intable.S) = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -1130,6 +1162,7 @@ module%template.portable Make (M : Intable.S) = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -1155,12 +1188,13 @@ module%template.portable Make (M : Intable.S) = struct
   [@@mode macc = (global, local)]
   ;;
 
-  let foldi_until t ~init ~f ~finish =
-    (foldi_until [@kind k] [@inlined hint])
+  let[@mode m = (global, local)] foldi_until t ~init ~f ~finish =
+    (foldi_until [@kind k] [@mode m] [@inlined hint])
       t
       ~init
-      ~f:(fun [@inline] int accum x -> f (of_int_exn int) accum x)
-      ~finish [@nontail]
+      ~f:(fun [@inline] int accum x ->
+        f (of_int_exn int) accum x [@exclave_if_local m ~reasons:[ May_return_local ]])
+      ~finish [@nontail] [@exclave_if_local m ~reasons:[ May_return_local ]]
   ;;
 
   let iteri t ~f =
@@ -1204,6 +1238,7 @@ module%template.portable Make (M : Intable.S) = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
@@ -1237,6 +1272,7 @@ module%template.portable Make (M : Intable.S) = struct
         , immediate64
         , value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null
+        , immediate64_or_null & value_or_null
         , value_or_null & value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null & immediate64_or_null
         , value_or_null & value_or_null & value_or_null & value_or_null
@@ -1261,6 +1297,7 @@ module%template.portable Make (M : Intable.S) = struct
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
+      , immediate64_or_null & value_or_null
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
