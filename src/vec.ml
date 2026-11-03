@@ -1,3 +1,5 @@
+[@@@ocaml.flambda_o3]
+
 open! Core
 open! Import
 
@@ -17,43 +19,35 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null )]
 
   let is_sorted t ~compare =
-    (* This is a copy-paste from [Array.is_sorted]. *)
-    let i = ref ((length [@kind k]) t - 1) in
-    let result = ref true in
-    while !i > 0 && !result do
-      let elt_i = (unsafe_get [@kind k]) t !i in
-      let elt_i_minus_1 = (unsafe_get [@kind k]) t (!i - 1) in
-      if compare elt_i_minus_1 elt_i > 0 then result := false;
-      decr i
+    let mutable i = 1 in
+    let mutable result = true in
+    while i < (length [@kind k]) t && result do
+      let elt_i_minus_1 = (unsafe_get [@kind k]) t (i - 1) in
+      let elt_i = (unsafe_get [@kind k]) t i in
+      if compare elt_i_minus_1 elt_i > 0 then result <- false;
+      i <- i + 1
     done;
-    !result
+    result
   ;;
 
   let is_sorted_strictly t ~compare =
-    (* This is a copy-paste from [Array.is_sorted_strictly]. *)
-    let i = ref ((length [@kind k]) t - 1) in
-    let result = ref true in
-    while !i > 0 && !result do
-      let elt_i = (unsafe_get [@kind k]) t !i in
-      let elt_i_minus_1 = (unsafe_get [@kind k]) t (!i - 1) in
-      if compare elt_i_minus_1 elt_i >= 0 then result := false;
-      decr i
+    let mutable i = 1 in
+    let mutable result = true in
+    while i < (length [@kind k]) t && result do
+      let elt_i_minus_1 = (unsafe_get [@kind k]) t (i - 1) in
+      let elt_i = (unsafe_get [@kind k]) t i in
+      if compare elt_i_minus_1 elt_i >= 0 then result <- false;
+      i <- i + 1
     done;
-    !result
+    result
   ;;]
-
-  include%template Binary_searchable.Make1 [@modality portable] (struct
-      type nonrec 'a t = 'a t
-
-      let length = length
-      let get = unsafe_get
-    end)
 
   [%%template
   [@@@kind.default
@@ -68,6 +62,7 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -109,6 +104,16 @@ module With_integer_index = struct
     (unsafe_set [@kind k]) t i element
   ;;]
 
+  include%template Binary_searchable.Make1 [@modality portable] (struct
+      type nonrec 'a t = 'a t
+
+      let length = length
+
+      (* This must use *safe* get to raise if binary-search's [compare] mutates the length
+         of the vector. *)
+      let get = get
+    end)
+
   let maybe_get t i = if i < 0 || i >= length t then None else Some (unsafe_get t i)
 
   let maybe_get_local t i =
@@ -142,6 +147,7 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -196,6 +202,7 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -265,6 +272,7 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -348,30 +356,48 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null )]
 
+  (* The loops below *deliberately* reload the length on every iteration so that we know
+     the index is valid even if [f] mutates the vec. *)
+
+  let rec iteri' t i ~f =
+    let e = (unsafe_get [@kind k]) t i in
+    f i e;
+    let i = i + 1 in
+    if i < (length [@kind k]) t then (iteri' [@kind k]) t i ~f
+  ;;
+
   let iteri t ~f =
-    for i = 0 to (max_index [@kind k]) t do
-      f i ((unsafe_get [@kind k]) t i)
-    done
+    match (length [@kind k]) t with
+    | 0 -> ()
+    | _ -> (iteri' [@kind k]) t 0 ~f
+  ;;
+
+  let rec iter' t i ~f =
+    let e = (unsafe_get [@kind k]) t i in
+    f e;
+    let i = i + 1 in
+    if i < (length [@kind k]) t then (iter' [@kind k]) t i ~f
   ;;
 
   let iter t ~f =
-    for i = 0 to (max_index [@kind k]) t do
-      f ((unsafe_get [@kind k]) t i)
-    done
+    match (length [@kind k]) t with
+    | 0 -> ()
+    | _ -> (iter' [@kind k]) t 0 ~f
   ;;
 
-  let[@mode m = (global, local)] rec iter_until' t ~f ~finish ~max_index i =
-    (if i > max_index
+  let[@mode m = (global, local)] rec iter_until' t ~f ~finish i =
+    (if i >= (length [@kind k]) t
      then finish ()
      else (
        match (f ((unsafe_get [@kind k]) t i) : _ Continue_or_stop.t) with
        | Stop s -> s
-       | Continue () -> (iter_until' [@kind k] [@mode m]) t ~f ~finish ~max_index (i + 1)))
+       | Continue () -> (iter_until' [@kind k] [@mode m]) t ~f ~finish (i + 1)))
     [@exclave_if_local m ~reasons:[ May_return_local ]]
   ;;
 
@@ -380,16 +406,15 @@ module With_integer_index = struct
       t
       ~f
       ~finish
-      ~max_index:((max_index [@kind k]) t)
       0 [@exclave_if_local m ~reasons:[ May_return_local ]]
   ;;]
 
   let to_list t =
-    let result = ref [] in
+    let mutable result = [] in
     for i = max_index t downto 0 do
-      result := unsafe_get t i :: !result
+      result <- unsafe_get t i :: result
     done;
-    !result
+    result
   ;;
 
   let to_local_list t = exclave_
@@ -400,10 +425,10 @@ module With_integer_index = struct
   ;;
 
   external unsafe_array_sub
-    :  local_ Obj.t array
+    :  Obj.t array @ local
     -> int
     -> int
-    -> local_ 'a iarray
+    -> 'a iarray @ local
     @@ portable
     = "caml_array_sub_local"
 
@@ -450,11 +475,11 @@ module With_integer_index = struct
   ;;
 
   let to_alist t =
-    let result = ref [] in
+    let mutable result = [] in
     for i = max_index t downto 0 do
-      result := (i, unsafe_get t i) :: !result
+      result <- (i, unsafe_get t i) :: result
     done;
-    !result
+    result
   ;;
 
   (* Convert to a sequence but does not attempt to protect against modification in the
@@ -473,6 +498,7 @@ module With_integer_index = struct
   ;;
 
   let of_array arr = init (Array.length arr) ~f:(fun i -> Array.get arr i)
+  let of_iarray arr = init (Iarray.length arr) ~f:(fun i -> Iarray.get arr i)
 
   let of_sequence seq =
     (* We don't know the length of seq, so we can't set an initial capacity *)
@@ -494,6 +520,7 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -501,9 +528,10 @@ module With_integer_index = struct
 
   let foldi t ~(init @ macc) ~(f : (int -> 'acc @ macc -> 'a -> 'acc @ macc) @ local) =
     (let mutable r = init in
-     for i = 0 to (max_index [@kind k]) t do
-       ((r
-       <- f i r ((unsafe_get [@kind k]) t i))
+     let mutable i = 0 in
+     while i < (length [@kind k]) t do
+       ((r <- f i r ((unsafe_get [@kind k]) t i);
+         i <- i + 1)
        [@exclave_if_local macc ~reasons:[ May_return_local ]])
      done;
      r)
@@ -513,9 +541,10 @@ module With_integer_index = struct
 
   let fold t ~(init @ macc) ~(f : ('acc @ macc -> 'a -> 'acc @ macc) @ local) =
     (let mutable r = init in
-     for i = 0 to (max_index [@kind k]) t do
-       ((r
-       <- f r ((unsafe_get [@kind k]) t i))
+     let mutable i = 0 in
+     while i < (length [@kind k]) t do
+       ((r <- f r ((unsafe_get [@kind k]) t i);
+         i <- i + 1)
        [@exclave_if_local macc ~reasons:[ May_return_local ]])
      done;
      r)
@@ -523,14 +552,13 @@ module With_integer_index = struct
   [@@mode macc = (global, local)]
   ;;
 
-  let[@mode m = (global, local)] rec foldi_until' t ~f ~acc ~finish ~max_index i =
-    (if i > max_index
+  let[@mode m = (global, local)] rec foldi_until' t ~f ~acc ~finish i =
+    (if i >= (length [@kind k]) t
      then finish acc
      else (
        match (f i acc ((unsafe_get [@kind k]) t i) : _ Continue_or_stop.t) with
        | Stop s -> s
-       | Continue acc ->
-         (foldi_until' [@kind k] [@mode m]) t ~f ~max_index (i + 1) ~acc ~finish))
+       | Continue acc -> (foldi_until' [@kind k] [@mode m]) t ~f (i + 1) ~acc ~finish))
     [@exclave_if_local m ~reasons:[ May_return_local ]]
   ;;
 
@@ -540,7 +568,6 @@ module With_integer_index = struct
       ~f
       ~acc:init
       ~finish
-      ~max_index:((max_index [@kind k]) t)
       0 [@exclave_if_local m ~reasons:[ May_return_local ]]
   ;;]
 
@@ -569,6 +596,7 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -611,6 +639,7 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -619,9 +648,12 @@ module With_integer_index = struct
   (** Returns the length of the longest prefix for which [f] is true. *)
   let take_while_len (type a : k) (t : (a t[@kind k])) ~(local_ f) : int =
     let rec loop i =
-      if i >= (length [@kind k]) t || not (f ((get [@kind k]) t i))
-      then i
-      else (loop [@tailcall]) (i + 1)
+      let current_length = (length [@kind k]) t in
+      if i >= current_length
+      then current_length
+      else if f ((get [@kind k]) t i)
+      then (loop [@tailcall]) (i + 1)
+      else Int.min i ((length [@kind k]) t)
     in
     loop 0 [@nontail]
   ;;
@@ -645,6 +677,7 @@ module With_integer_index = struct
         , value_or_null & value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null & immediate64_or_null
         , value_or_null & value_or_null & value_or_null & value_or_null
+        , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
         , immediate64_or_null
           & immediate64_or_null
           & immediate64_or_null
@@ -665,33 +698,39 @@ module With_integer_index = struct
     ;;
 
     let filter t ~f =
-      let dest = ref 0 in
-      for i = 0 to (max_index [@kind k]) t do
+      let mutable dest = 0 in
+      let mutable i = 0 in
+      while i < (length [@kind k]) t do
         let x = (unsafe_get [@kind k]) t i in
         if f x
         then (
-          if !dest < i then (unsafe_set [@kind k]) t !dest x;
-          incr dest)
+          if dest < i && dest < (length [@kind k]) t then (unsafe_set [@kind k]) t dest x;
+          dest <- dest + 1);
+        i <- i + 1
       done;
-      let dest = !dest in
       (shrink_to [@kind k]) t ~len:dest
     ;;
 
     let map t ~f =
-      for i = 0 to (max_index [@kind k]) t do
-        (unsafe_set [@kind k]) t i (f ((unsafe_get [@kind k]) t i))
+      let mutable i = 0 in
+      while i < (length [@kind k]) t do
+        let x = f ((unsafe_get [@kind k]) t i) in
+        if i < (length [@kind k]) t then (unsafe_set [@kind k]) t i x;
+        i <- i + 1
       done
     ;;
 
     let mapi t ~f =
-      for i = 0 to (max_index [@kind k]) t do
-        (unsafe_set [@kind k]) t i (f i ((unsafe_get [@kind k]) t i))
+      let mutable i = 0 in
+      while i < (length [@kind k]) t do
+        let x = f i ((unsafe_get [@kind k]) t i) in
+        if i < (length [@kind k]) t then (unsafe_set [@kind k]) t i x;
+        i <- i + 1
       done
     ;;
 
     let remove_consecutive_duplicates ?(which_to_keep = `First) t ~equal =
-      let max_idx = (max_index [@kind k]) t in
-      if max_idx < 1
+      if (length [@kind k]) t <= 1
       then ()
       else (
         let new_length =
@@ -700,7 +739,7 @@ module With_integer_index = struct
             (* src_idx iterates ahead and writes the new element to dest_idx when a new
                run starts. *)
             let rec loop ~src_idx ~dest_idx ~curr_elt =
-              match src_idx > max_idx with
+              match src_idx >= (length [@kind k]) t with
               | true ->
                 (* we didn't write here, so dest_idx=7 -> vec is 0..6 -> length=7 *)
                 dest_idx
@@ -709,7 +748,7 @@ module With_integer_index = struct
                 (match equal src curr_elt with
                  | true -> loop ~src_idx:(src_idx + 1) ~dest_idx ~curr_elt
                  | false ->
-                   if dest_idx < src_idx
+                   if dest_idx < src_idx && dest_idx < (length [@kind k]) t
                    then (* set to the new element *)
                      (unsafe_set [@kind k]) t dest_idx src;
                    loop ~src_idx:(src_idx + 1) ~dest_idx:(dest_idx + 1) ~curr_elt:src)
@@ -718,10 +757,11 @@ module With_integer_index = struct
           | `Last ->
             (* src_idx iterates ahead and writes to dest_idx when a run ends *)
             let rec loop ~src_idx ~dest_idx ~elt_to_keep =
-              match src_idx > max_idx with
+              match src_idx >= (length [@kind k]) t with
               | true ->
                 (* we need to make sure the last element is properly set *)
-                (unsafe_set [@kind k]) t dest_idx elt_to_keep;
+                if dest_idx < (length [@kind k]) t
+                then (unsafe_set [@kind k]) t dest_idx elt_to_keep;
                 (* we did write here, so dest_idx=7 -> vec is 0..7 -> length=7+1=8 *)
                 dest_idx + 1
               | false ->
@@ -729,7 +769,7 @@ module With_integer_index = struct
                 (match equal src elt_to_keep with
                  | true -> loop ~src_idx:(src_idx + 1) ~dest_idx ~elt_to_keep:src
                  | false ->
-                   if dest_idx < src_idx
+                   if dest_idx < src_idx && dest_idx < (length [@kind k]) t
                    then
                      (* set to the previous element *)
                      (unsafe_set [@kind k]) t dest_idx elt_to_keep;
@@ -754,25 +794,27 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null )]
 
-  let rec forall2__same_length (t1 @ m) (t2 @ m) ~f i length =
-    if i >= length
-    then true
+  let rec equal' (t1 @ m) (t2 @ m) ~equal i =
+    let length1 = (length [@kind k]) t1 in
+    let length2 = (length [@kind k]) t2 in
+    if i >= Int.min length1 length2
+    then Int.equal length1 length2
     else
-      f ((unsafe_get [@mode m] [@kind k]) t1 i) ((unsafe_get [@mode m] [@kind k]) t2 i)
-      && (forall2__same_length [@mode m] [@kind k]) t1 t2 ~f (i + 1) length
+      equal
+        ((unsafe_get [@mode m] [@kind k]) t1 i)
+        ((unsafe_get [@mode m] [@kind k]) t2 i)
+      && (equal' [@mode m] [@kind k]) t1 t2 ~equal (i + 1)
   [@@mode m = (local, global)]
   ;;
 
-  let equal equal (t @ m) (t' @ m) =
-    let length' = (length [@kind k]) t in
-    if length' <> (length [@kind k]) t'
-    then false
-    else (forall2__same_length [@mode m] [@kind k]) t t' ~f:equal 0 length' [@nontail]
+  let equal equal (t1 @ m) (t2 @ m) =
+    (equal' [@mode m] [@kind k]) t1 t2 ~equal 0 [@nontail]
   [@@mode m = (local, global)]
   ;;
 
@@ -795,36 +837,41 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null )]
 
   let sexp_of_t (type a : k) (sexp_of_a : a -> Sexp.t) t =
-    Array.init ((length [@kind k]) t) ~f:(fun i -> sexp_of_a ((unsafe_get [@kind k]) t i))
-    |> [%sexp_of: Sexp.t array]
+    let rec loop i rev_sexps =
+      if i >= (length [@kind k]) t
+      then Sexp.List (List.rev rev_sexps)
+      else (
+        let sexp = sexp_of_a ((unsafe_get [@kind k]) t i) in
+        loop (i + 1) (sexp :: rev_sexps))
+    in
+    loop 0 []
   ;;
 
   let is_empty t = (length [@kind k]) t = 0
 
   let exists t ~f =
-    let i = ref 0 in
-    let n = (length [@kind k]) t in
-    let result = ref false in
-    while !i < n && not !result do
-      if f ((unsafe_get [@kind k]) t !i) then result := true else incr i
+    let mutable i = 0 in
+    let mutable result = false in
+    while i < (length [@kind k]) t && not result do
+      if f ((unsafe_get [@kind k]) t i) then result <- true else i <- i + 1
     done;
-    !result
+    result
   ;;
 
   let for_all t ~f =
-    let i = ref 0 in
-    let n = (length [@kind k]) t in
-    let result = ref true in
-    while !i < n && !result do
-      if f ((unsafe_get [@kind k]) t !i) then incr i else result := false
+    let mutable i = 0 in
+    let mutable result = true in
+    while i < (length [@kind k]) t && result do
+      if f ((unsafe_get [@kind k]) t i) then i <- i + 1 else result <- false
     done;
-    !result
+    result
   ;;
 
   let mem t a ~equal =
@@ -848,6 +895,7 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -861,17 +909,16 @@ module With_integer_index = struct
     (fold [@kind k]) t ~init:M.zero ~f:(fun n a -> M.( + ) n (f a)) [@nontail]
   ;;]
 
-  (* The code for [find] and [find_exn] would be simpler (wouldn't involve threading
-     through [max_index]) if we iterated backward, but we iterate forward to be consistent
-     with other containers. *)
-
-  let rec find' t ~f ~max_index i =
-    if i > max_index
-    then None
+  let rec find_or_null' t ~f i =
+    if i >= length t
+    then Null
     else (
       let x = unsafe_get t i in
-      if f x then Some x else find' t ~f ~max_index (i + 1))
+      if f x then This x else find_or_null' t ~f (i + 1))
   ;;
+
+  let[@inline] find_or_null t ~f = find_or_null' t ~f 0
+  let[@inline] find t ~f = Or_null.to_option (find_or_null t ~f)
 
   let[@cold] raise__not_found () =
     raise (Base.Not_found_s [%message "Vec.find_exn: not found"])
@@ -883,12 +930,17 @@ module With_integer_index = struct
   *)
   let[@inline always] raise__not_found () = raise__not_found () [@nontail]
 
+  let[@inline] find_exn t ~f =
+    match find_or_null t ~f with
+    | This x -> x
+    | Null -> raise__not_found ()
+  ;;
+
   [%%template
   [@@@kind.default
     k
     = ( float32
       , bits64
-      , value
       , immediate64
       , value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null
@@ -896,102 +948,103 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null )]
 
-  let rec find_exn' t ~f ~max_index i =
-    if i > max_index
+  let rec find_exn' t ~f i =
+    if i >= (length [@kind k]) t
     then (
       match raise__not_found () with
       | (_ : Nothing.t) -> .)
     else (
       let x = (unsafe_get [@kind k]) t i in
-      if f x then x else (find_exn' [@kind k]) t ~f ~max_index (i + 1))
+      if f x then x else (find_exn' [@kind k]) t ~f (i + 1))
   ;;
 
-  let find_exn t ~f = (find_exn' [@kind k]) t ~f ~max_index:((max_index [@kind k]) t) 0]
+  let find_exn t ~f = (find_exn' [@kind k]) t ~f 0]
 
-  let find t ~f = find' t ~f ~max_index:(max_index t) 0
-
-  let rec findi' t ~f ~max_index i =
-    if i > max_index
+  let rec findi' t ~f i =
+    if i >= length t
     then None
     else (
       let x = unsafe_get t i in
-      if f x then Some (i, x) else findi' t ~f ~max_index (i + 1))
+      if f x then Some (i, x) else findi' t ~f (i + 1))
   ;;
 
-  let findi t ~f = findi' t ~f ~max_index:(max_index t) 0
+  let findi t ~f = findi' t ~f 0
 
   let find_and_remove t ~f =
     match findi t ~f with
     | None -> None
     | Some (i, found) ->
-      remove_exn t i;
+      if i < length t then remove_exn t i;
       Some found
   ;;
 
-  let rec find_map' t ~f ~max_index i =
-    if i > max_index
+  let rec find_map' t ~f i =
+    if i >= length t
     then None
     else (
       match f (unsafe_get t i) with
-      | None -> find_map' t ~f ~max_index (i + 1)
+      | None -> find_map' t ~f (i + 1)
       | some -> some)
   ;;
 
-  let find_map t ~f = find_map' t ~f ~max_index:(max_index t) 0
+  let find_map t ~f = find_map' t ~f 0
 
-  let rec fold_result' t ~f ~acc ~max_index i =
-    if i > max_index
+  let rec fold_result' t ~f ~acc i =
+    if i >= length t
     then Ok acc
     else (
       match f acc (unsafe_get t i) with
-      | Ok acc -> fold_result' t ~f ~max_index (i + 1) ~acc
+      | Ok acc -> fold_result' t ~f (i + 1) ~acc
       | err -> err)
   ;;
 
-  let fold_result t ~init ~f = fold_result' t ~f ~acc:init ~max_index:(max_index t) 0
+  let fold_result t ~init ~f = fold_result' t ~f ~acc:init 0
 
-  let rec fold_until' t ~f ~acc ~finish ~max_index i =
-    if i > max_index
+  let rec fold_until' t ~f ~acc ~finish i =
+    if i >= length t
     then finish acc
     else (
       match (f acc (unsafe_get t i) : _ Continue_or_stop.t) with
       | Stop s -> s
-      | Continue acc -> fold_until' t ~f ~max_index (i + 1) ~acc ~finish)
+      | Continue acc -> fold_until' t ~f (i + 1) ~acc ~finish)
   ;;
 
-  let fold_until t ~init ~f ~finish =
-    fold_until' t ~f ~acc:init ~finish ~max_index:(max_index t) 0
-  ;;
+  let fold_until t ~init ~f ~finish = fold_until' t ~f ~acc:init ~finish 0
 
   let max_elt t ~compare =
     if is_empty t
     then None
     else (
-      let max = ref (unsafe_get t 0) in
-      for i = 1 to max_index t do
+      let mutable max = unsafe_get t 0 in
+      let mutable i = 1 in
+      while i < length t do
         let x = unsafe_get t i in
-        let max' = !max in
-        max := if compare max' x < 0 then x else max'
+        let max' = max in
+        max <- Bool.select (compare max' x < 0) x max';
+        i <- i + 1
       done;
-      Some !max)
+      Some max)
   ;;
 
   let min_elt t ~compare =
     if is_empty t
     then None
     else (
-      let min = ref (unsafe_get t 0) in
-      for i = 1 to max_index t do
+      let mutable min = unsafe_get t 0 in
+      let mutable i = 1 in
+      while i < length t do
         let x = unsafe_get t i in
-        let min' = !min in
-        min := if compare min' x > 0 then x else min'
+        let min' = min in
+        min <- Bool.select (compare min' x > 0) x min';
+        i <- i + 1
       done;
-      Some !min)
+      Some min)
   ;;
 
   let[@inline available] to_array t = Array.init (length t) ~f:(unsafe_get t)
@@ -1016,6 +1069,7 @@ module With_integer_index = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -1027,19 +1081,18 @@ module With_integer_index = struct
   ;;
 
   let compare cmp (t1 @ m) (t2 @ m) =
-    let len1 = (length [@kind k]) t1 in
-    let len2 = (length [@kind k]) t2 in
-    let min_len = Int.min len1 len2 in
-    let result = ref 0 in
-    let i = ref 0 in
-    while !i < min_len && !result = 0 do
+    let mutable result = 0 in
+    let mutable i = 0 in
+    while result = 0 && i < Int.min ((length [@kind k]) t1) ((length [@kind k]) t2) do
       result
-      := cmp
-           ((unsafe_get [@mode m] [@kind k]) t1 !i)
-           ((unsafe_get [@mode m] [@kind k]) t2 !i);
-      i := !i + 1
+      <- cmp
+           ((unsafe_get [@mode m] [@kind k]) t1 i)
+           ((unsafe_get [@mode m] [@kind k]) t2 i);
+      i <- i + 1
     done;
-    if !result = 0 then Int.compare len1 len2 else !result
+    if result = 0
+    then Int.compare ((length [@kind k]) t1) ((length [@kind k]) t2)
+    else result
   [@@mode m = (local, global)]
   ;;
 
@@ -1096,12 +1149,12 @@ module With_integer_index = struct
 
   module For_testing = struct
     let%template zero_unused_capacity t =
-      let inner : _ I64.Array.t = (Expert.unsafe_inner [@kind bits64]) t in
-      let inner : I64.t I64.Array.t = Obj.magic inner in
+      let inner : _ array = (Expert.unsafe_inner [@kind bits64]) t in
+      let inner : I64.t array = Obj.magic inner in
       let capacity = (capacity [@kind bits64]) t in
       let length = (length [@kind bits64]) t in
       for i = length to capacity - 1 do
-        I64.Array.set inner i #0L
+        Array.set inner i #0L
       done
     ;;
   end
@@ -1135,6 +1188,7 @@ module%template.portable Make (M : Intable.S) = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -1166,6 +1220,7 @@ module%template.portable Make (M : Intable.S) = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -1221,12 +1276,12 @@ module%template.portable Make (M : Intable.S) = struct
        at the expense of an extra allocation. This is a bit more copy-pasty, but avoids
        that.
     *)
-    let result = ref [] in
+    let mutable result = [] in
     for i = max_index t downto 0 do
       let m = of_int_exn i in
-      result := (m, unsafe_get t m) :: !result
+      result <- (m, unsafe_get t m) :: result
     done;
-    !result
+    result
   ;;
 
   [%%template
@@ -1242,6 +1297,7 @@ module%template.portable Make (M : Intable.S) = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -1276,6 +1332,7 @@ module%template.portable Make (M : Intable.S) = struct
         , value_or_null & value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null & immediate64_or_null
         , value_or_null & value_or_null & value_or_null & value_or_null
+        , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
         , immediate64_or_null
           & immediate64_or_null
           & immediate64_or_null
@@ -1301,6 +1358,7 @@ module%template.portable Make (M : Intable.S) = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null

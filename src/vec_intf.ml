@@ -17,6 +17,7 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -33,14 +34,14 @@ module type S = sig
       results of [f] applied to the integers [0] to [n-1].
 
       Raise Invalid_argument if [n < 0]. *)
-  val init : int -> f:local_ (int -> 'a) -> ('a t[@kind k])
+  val init : int -> f:(int -> 'a) @ local -> ('a t[@kind k])
 
   (** Raises if the index is invalid. *)
   val get : ('a t[@kind k]) -> index -> 'a
   [@@zero_alloc]]
 
   val maybe_get : 'a t -> index -> 'a option
-  val maybe_get_local : 'a t -> index -> local_ 'a Modes.Global.t option [@@zero_alloc]
+  val maybe_get_local : 'a t -> index -> 'a Modes.Global.t option @ local [@@zero_alloc]
   val maybe_get_or_null : 'a t -> index -> 'a or_null [@@zero_alloc]
   val last : 'a t -> 'a or_null
 
@@ -57,6 +58,7 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -86,31 +88,45 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null )]
 
-  val mem : ('a t[@kind k]) -> 'a -> equal:local_ ('a -> 'a -> bool) -> bool
+  val mem : ('a t[@kind k]) -> 'a -> equal:('a -> 'a -> bool) @ local -> bool
   val length : (_ t[@kind k]) -> int [@@zero_alloc]
   val is_empty : (_ t[@kind k]) -> bool [@@zero_alloc]
-  val iter : ('a t[@kind k]) -> f:local_ ('a -> unit) -> unit
+
+  (** [Vec] functions with [unsafe_] in their name are free to cause memory unsafety if
+      you change the length of a vector while iterating through it.
+
+      If you eschew all [unsafe_] functions, all [Vec] iteration functions will re-check
+      the length every loop iteration. Unless otherwise documented to raise, iteration
+      will stop early if you shrink the vector, and will process new elements if you grow
+      it.
+
+      This mutation-during-iteration guarantee applies to every function that traverses a
+      vec while accepting a user-defined callback, including obvious functions like [iter]
+      and non-obvious ones like [sexp_of_t] and [compare]. *)
+  val iter : ('a t[@kind k]) -> f:('a -> unit) @ local -> unit
 
   val fold
-    :  ('a t[@kind k])
+    : ('acc : value_or_null).
+    ('a t[@kind k])
     -> init:'acc @ macc
     -> f:('acc @ macc -> 'a -> 'acc @ macc) @ local
     -> 'acc @ macc
   [@@mode macc = (global, local)]
 
-  val exists : ('a t[@kind k]) -> f:local_ ('a -> bool) -> bool
-  val for_all : ('a t[@kind k]) -> f:local_ ('a -> bool) -> bool
-  val count : ('a t[@kind k]) -> f:local_ ('a -> bool) -> int
+  val exists : ('a t[@kind k]) -> f:('a -> bool) @ local -> bool
+  val for_all : ('a t[@kind k]) -> f:('a -> bool) @ local -> bool
+  val count : ('a t[@kind k]) -> f:('a -> bool) @ local -> int
 
   val sum
     :  (module Container.Summable with type t = 'sum)
     -> ('a t[@kind k])
-    -> f:local_ ('a -> 'sum)
+    -> f:('a -> 'sum) @ local
     -> 'sum
 
   val sub : ('a t[@kind k]) -> pos:int -> len:int -> ('a t[@kind k])
@@ -123,15 +139,21 @@ module type S = sig
     -> len:int
     -> unit]
 
+  (** Shadows the [fold] from [Container.S1] so that the accumulator may be
+      [value_or_null], e.g. [fold t ~init:Null ~f]. *)
   val%template fold
-    :  'a t
+    : ('acc : value_or_null).
+    'a t
     -> init:'acc @ macc
     -> f:('acc @ macc -> 'a -> 'acc @ macc) @ local
     -> 'acc @ macc
-  [@@mode macc = local]
+  [@@mode macc = (global, local)]
 
-  val%template to_array : ('a t[@kind float32]) -> 'a F32.Array.t [@@kind k = float32]
-  val%template to_array : ('a t[@kind bits64]) -> 'a I64.Array.t [@@kind k = bits64]
+  val%template to_array : ('a t[@kind k]) -> 'a array [@@kind k = (float32, bits64)]
+
+  (** [find_or_null t ~f] returns [This x] for the first element [x] satisfying [f], or
+      [Null] if no such element exists. *)
+  val find_or_null : 'a t -> f:('a -> bool) @ local -> 'a or_null
 
   [%%template:
   [@@@kind.default
@@ -146,16 +168,19 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null )]
 
   (** Finds the first 'a for which f is true *)
-  val find_exn : ('a t[@kind k]) -> f:local_ ('a -> bool) -> 'a]
+  val find_exn : ('a t[@kind k]) -> f:('a -> bool) @ local -> 'a]
 
   (** [sort] uses constant heap space. To sort only part of the array, specify [pos] to be
-      the index to start sorting from and [len] indicating how many elements to sort. *)
+      the index to start sorting from and [len] indicating how many elements to sort.
+
+      Raises if you change the length of the vector inside [compare]. *)
   val sort : ?pos:int -> ?len:int -> 'a t -> compare:('a -> 'a -> int) -> unit
 
   [%%template:
@@ -171,14 +196,16 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null )]
 
-  val is_sorted : ('a t[@kind k]) -> compare:local_ ('a -> 'a -> int) -> bool
-  val is_sorted_strictly : ('a t[@kind k]) -> compare:local_ ('a -> 'a -> int) -> bool]
+  val is_sorted : ('a t[@kind k]) -> compare:('a -> 'a -> int) @ local -> bool
+  val is_sorted_strictly : ('a t[@kind k]) -> compare:('a -> 'a -> int) @ local -> bool]
 
+  (** Binary search may raise if you change the length of the vector inside [compare]. *)
   include Binary_searchable.S1 with type 'a t := 'a t
 
   [%%template:
@@ -194,6 +221,7 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -219,6 +247,7 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -253,9 +282,9 @@ module type S = sig
 
   (** Find the first element that satisfies [f]. If exists, remove the element from the
       vector and return it. This is not a fast implementation, and runs in O(N) time. *)
-  val find_and_remove : 'a t -> f:local_ ('a -> bool) -> 'a option
+  val find_and_remove : 'a t -> f:('a -> bool) @ local -> 'a option
 
-  val findi : 'a t -> f:local_ ('a -> bool) -> (index * 'a) option
+  val findi : 'a t -> f:('a -> bool) @ local -> (index * 'a) option
   val pop_back_imm_exn : ('a : immediate64). 'a t -> 'a [@@zero_alloc]
   val pop_back_unit_imm_exn : ('a : immediate64). 'a t -> unit [@@zero_alloc]
   val peek_back : 'a t -> 'a or_null
@@ -274,6 +303,7 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -284,14 +314,15 @@ module type S = sig
   val peek_back_exn : ('a t[@kind k]) -> 'a
 
   val foldi
-    :  ('a t[@kind k])
+    : ('acc : value_or_null).
+    ('a t[@kind k])
     -> init:'acc @ macc
     -> f:(index -> 'acc @ macc -> 'a -> 'acc @ macc) @ local
     -> 'acc @ macc
   [@@mode macc = (global, local)]
 
   val foldi_until
-    : ('b : value_or_null).
+    : ('acc : value_or_null) ('b : value_or_null).
     ('a t[@kind k])
     -> init:'acc @ m
     -> f:(index -> 'acc @ m -> 'a -> ('acc, 'b) Continue_or_stop.t @ m) @ local
@@ -307,11 +338,11 @@ module type S = sig
     -> 'b @ m
   [@@mode m = (global, local)]
 
-  val iteri : ('a t[@kind k]) -> f:local_ (index -> 'a -> unit) -> unit]
+  val iteri : ('a t[@kind k]) -> f:(index -> 'a -> unit) @ local -> unit]
 
   val to_list : 'a t -> 'a list
-  val to_local_list : 'a t -> local_ 'a list
-  val to_local_iarray : 'a t -> local_ 'a iarray
+  val to_local_list : 'a t -> 'a list @ local
+  val to_local_iarray : 'a t -> 'a iarray @ local
   val to_iarray : 'a t -> 'a iarray
   val to_alist : 'a t -> (index * 'a) list
 
@@ -325,6 +356,7 @@ module type S = sig
 
   val of_list : 'a list -> 'a t
   val of_array : 'a array -> 'a t
+  val of_iarray : 'a iarray -> 'a t
   val of_sequence : 'a Sequence.t -> 'a t
 
   [%%template:
@@ -340,6 +372,7 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -347,7 +380,7 @@ module type S = sig
 
   (** [take_while t ~f] returns a fresh vec containing the longest prefix of [t] for which
       [f] is [true]. *)
-  val take_while : ('a t[@kind k]) -> f:local_ ('a -> bool) -> ('a t[@kind k])]
+  val take_while : ('a t[@kind k]) -> f:('a -> bool) @ local -> ('a t[@kind k])]
 
   module Inplace : sig
     [%%template:
@@ -363,6 +396,7 @@ module type S = sig
         , value_or_null & value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null & immediate64_or_null
         , value_or_null & value_or_null & value_or_null & value_or_null
+        , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
         , immediate64_or_null
           & immediate64_or_null
           & immediate64_or_null
@@ -373,16 +407,16 @@ module type S = sig
 
     (** [take_while t ~f] shortens the vec in place to the longest prefix of [t] for which
         [f] is [true]. *)
-    val take_while : ('a t[@kind k]) -> f:local_ ('a -> bool) -> unit
+    val take_while : ('a t[@kind k]) -> f:('a -> bool) @ local -> unit
 
     (** Remove all elements from [t] that don't satisfy [f]. Shortens the vec in place. *)
-    val filter : ('a t[@kind k]) -> f:local_ ('a -> bool) -> unit
+    val filter : ('a t[@kind k]) -> f:('a -> bool) @ local -> unit
 
     (** Modifies a vec in place, applying [f] to every element of the vec. *)
-    val map : ('a t[@kind k]) -> f:local_ ('a -> 'a) -> unit
+    val map : ('a t[@kind k]) -> f:('a -> 'a) @ local -> unit
 
     (** Same as [map], but [f] also takes the index. *)
-    val mapi : ('a t[@kind k]) -> f:local_ (index -> 'a -> 'a) -> unit
+    val mapi : ('a t[@kind k]) -> f:(index -> 'a -> 'a) @ local -> unit
 
     (** Removes adjacent duplicates in-place. The relative order of the other elements is
         unaffected. The element kept from a run of duplicates is determined by
@@ -390,7 +424,7 @@ module type S = sig
     val remove_consecutive_duplicates
       :  ?which_to_keep:[ `First | `Last ]
       -> ('a t[@kind k])
-      -> equal:local_ ('a -> 'a -> bool)
+      -> equal:('a -> 'a -> bool) @ local
       -> unit]
   end
 
@@ -407,6 +441,7 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -437,6 +472,7 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -472,6 +508,7 @@ module type S = sig
         , value_or_null & value_or_null & value_or_null
         , immediate64_or_null & immediate64_or_null & immediate64_or_null
         , value_or_null & value_or_null & value_or_null & value_or_null
+        , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
         , immediate64_or_null
           & immediate64_or_null
           & immediate64_or_null
@@ -492,6 +529,7 @@ module type S = sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -527,5 +565,6 @@ module type Vec = sig @@ portable
   module type S = S
 
   (** Generate a specialised version of [Vec] with a custom index type. *)
-  module%template.portable Make (M : Intable.S) : S with type index := M.t
+  module%template.portable (Make @@ nonportable) (M : Intable.S) :
+    S with type index := M.t
 end

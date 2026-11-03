@@ -10,8 +10,7 @@ module Arr_impl : sig
 end
 
 type%template 'a arr_impl = 'a Arr_impl.t
-type%template 'a arr_impl = 'a F32.Array.t [@@kind float32]
-type%template 'a arr_impl = 'a I64.Array.t [@@kind bits64]
+type%template ('a : k) arr_impl = 'a array [@@kind k = (float32, bits64)]
 
 [%%template:
 [@@@kind.default
@@ -25,6 +24,7 @@ type%template 'a arr_impl = 'a I64.Array.t [@@kind bits64]
     , value_or_null & value_or_null & value_or_null
     , immediate64_or_null & immediate64_or_null & immediate64_or_null
     , value_or_null & value_or_null & value_or_null & value_or_null
+    , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
     , immediate64_or_null
       & immediate64_or_null
       & immediate64_or_null
@@ -33,18 +33,18 @@ type%template 'a arr_impl = 'a I64.Array.t [@@kind bits64]
 
 type ('a : k) t : mutable_data with 'a
 
-val length : local_ (_ t[@kind k]) -> int [@@zero_alloc]
+val length : (_ t[@kind k]) @ local -> int [@@zero_alloc]
 val capacity : (_ t[@kind k]) -> int [@@zero_alloc]
 val create : ?initial_capacity:int -> unit -> (_ t[@kind k])
 val unsafe_create_uninitialized : len:int -> ('a t[@kind k])
-val init : int -> f:local_ (int -> 'a) -> ('a t[@kind k])
+val init : int -> f:(int -> 'a) @ local -> ('a t[@kind k])
 val unsafe_get : ('a t[@kind k]) @ m -> int -> 'a [@@mode m = (local, global)]
 val unsafe_set : ('a t[@kind k]) -> int -> 'a -> unit
 
 val unsafe_blit
-  :  src:local_ ('a t[@kind k])
+  :  src:('a t[@kind k]) @ local
   -> src_pos:int
-  -> dst:local_ ('a t[@kind k])
+  -> dst:('a t[@kind k]) @ local
   -> dst_pos:int
   -> len:int
   -> unit
@@ -72,6 +72,7 @@ module With_structure_details : sig
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null

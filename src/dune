@@ -3,4 +3,4 @@
  (public_name vec)
  (libraries core ppx_stable_witness.stable_witness unboxed)
  (preprocess
-  (pps ppx_for_loop ppx_jane)))
+  (pps ppx_for_loop ppx_jane -compare-require-explicit-locality)))

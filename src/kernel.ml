@@ -135,6 +135,29 @@ module Array = struct
       unsafe_set t i e)
   ;;
 
+  let%template[@kind
+                k
+                = (immediate64_or_null
+                   & immediate64_or_null
+                   & value_or_null
+                   & value_or_null)]
+              [@inline] unsafe_clear_if_pointer
+    (type a : k)
+    (t : a array)
+    i
+    =
+    let e = unsafe_get t i in
+    let #(a1, a2, a3, a4) : #(Obj.t * Obj.t * Obj.t * Obj.t) = Obj.magic e in
+    if not
+         ((obj_is_int [@kind immediate64_or_null]) a1
+          && (obj_is_int [@kind immediate64_or_null]) a2
+          && (obj_is_int [@kind value_or_null]) a3
+          && (obj_is_int [@kind value_or_null]) a4)
+    then (
+      let e : a = Obj.magic #(Obj.repr 0, Obj.repr 0, Obj.repr 0, Obj.repr 0) in
+      unsafe_set t i e)
+  ;;
+
   let%template[@kind k = immediate64] [@inline] unsafe_clear_if_pointer
     (type a : k)
     (t : a array)
@@ -218,6 +241,10 @@ module Array = struct
                 = ( value_or_null & value_or_null & value_or_null & value_or_null
                   , immediate64_or_null
                     & immediate64_or_null
+                    & value_or_null
+                    & value_or_null
+                  , immediate64_or_null
+                    & immediate64_or_null
                     & immediate64_or_null
                     & immediate64_or_null )] unsafe_create_uninitialized
     (type a : k)
@@ -244,10 +271,12 @@ module%template
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
-        & immediate64_or_null )] Arr_impl =
+        & immediate64_or_null )]
+  Arr_impl =
 struct
   open Array
 
@@ -296,27 +325,35 @@ struct
 end
 
 module%template [@kind bits64] Arr_impl = struct
-  include I64.Array
-
-  type ('a : bits64) t = 'a I64.Array.t
-
-  let get_mono = get
+  type ('a : bits64) t = 'a array
 
   let[@inline] unsafe_create_uninitialized (type a : bits64) ~len : a t =
-    unsafe_create_uninitialized ~len
+    Array.magic_create_uninitialized ~len
   ;;
+
+  let length = Array.length
+  let get_mono = Array.get
+  let unsafe_get = Array.unsafe_get
+  let unsafe_set = Array.unsafe_set
+  let unsafe_blit = (Array.unsafe_blit [@kind bits64])
+  let init = (Array.init [@kind bits64])
+  let copy = (Array.copy [@kind bits64])
 end
 
 module%template [@kind float32] Arr_impl = struct
-  include F32.Array
-
-  type ('a : float32) t = 'a F32.Array.t
-
-  let get_mono = get
+  type ('a : float32) t = 'a array
 
   let[@inline] unsafe_create_uninitialized (type a : float32) ~len : a t =
-    unsafe_create_uninitialized ~len
+    Array.magic_create_uninitialized ~len
   ;;
+
+  let length = Array.length
+  let get_mono = Array.get
+  let unsafe_get = Array.unsafe_get
+  let unsafe_set = Array.unsafe_set
+  let unsafe_blit = (Array.unsafe_blit [@kind float32])
+  let init = (Array.init [@kind float32])
+  let copy = (Array.copy [@kind float32])
 end
 
 [%%template
@@ -330,6 +367,7 @@ end
     , value_or_null & value_or_null & value_or_null
     , immediate64_or_null & immediate64_or_null & immediate64_or_null
     , value_or_null & value_or_null & value_or_null & value_or_null
+    , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
     , immediate64_or_null
       & immediate64_or_null
       & immediate64_or_null
@@ -398,10 +436,11 @@ let%template[@kind k = (immediate64_or_null & immediate64_or_null & immediate64_
 
 let%template[@kind
               k
-              = (immediate64_or_null
-                 & immediate64_or_null
-                 & immediate64_or_null
-                 & immediate64_or_null)]
+              = ( immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
+                , immediate64_or_null
+                  & immediate64_or_null
+                  & immediate64_or_null
+                  & immediate64_or_null )]
             [@inline] sexp_of_out_of_range_element
   (type a : k)
   (a : a)
@@ -412,7 +451,7 @@ let%template[@kind
 ;;
 
 let%template[@kind float32] sexp_of_out_of_range_element (type a : float32) (a : a) =
-  let imm : float32# = magic_32 a in
+  let imm : f32 = magic_32 a in
   Sexp.Atom [%string "_%{imm#F32}"]
 ;;
 
@@ -480,10 +519,11 @@ let%template[@kind k = (immediate64_or_null & immediate64_or_null & immediate64_
 
 let%template[@kind
               k
-              = (immediate64_or_null
-                 & immediate64_or_null
-                 & immediate64_or_null
-                 & immediate64_or_null)]
+              = ( immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
+                , immediate64_or_null
+                  & immediate64_or_null
+                  & immediate64_or_null
+                  & immediate64_or_null )]
             [@inline] out_of_range_invariant
   (type a : k)
   (e : a)
@@ -509,6 +549,7 @@ let%template[@kind bits64] out_of_range_invariant _element = ()
     , value_or_null & value_or_null & value_or_null
     , immediate64_or_null & immediate64_or_null & immediate64_or_null
     , value_or_null & value_or_null & value_or_null & value_or_null
+    , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
     , immediate64_or_null
       & immediate64_or_null
       & immediate64_or_null
@@ -610,6 +651,7 @@ module With_structure_details = struct
       , value_or_null & value_or_null & value_or_null
       , immediate64_or_null & immediate64_or_null & immediate64_or_null
       , value_or_null & value_or_null & value_or_null & value_or_null
+      , immediate64_or_null & immediate64_or_null & value_or_null & value_or_null
       , immediate64_or_null
         & immediate64_or_null
         & immediate64_or_null
@@ -632,6 +674,10 @@ module With_structure_details = struct
   ;;]
 end
 
+let[@cold] raise_mutation_during_iteration #() =
+  raise_s [%message "mutation during iteration"]
+;;
+
 let%template[@kind
               k
               = ( float32
@@ -644,6 +690,10 @@ let%template[@kind
                 , value_or_null & value_or_null & value_or_null
                 , immediate64_or_null & immediate64_or_null & immediate64_or_null
                 , value_or_null & value_or_null & value_or_null & value_or_null
+                , immediate64_or_null
+                  & immediate64_or_null
+                  & value_or_null
+                  & value_or_null
                 , immediate64_or_null
                   & immediate64_or_null
                   & immediate64_or_null
@@ -669,7 +719,15 @@ let%template[@kind
         [%message
           "length shouldn't be more than capacity" (length : int) (capacity : int)];
     for pos = 0 to length - 1 do
-      a_inv (Arr.unsafe_get arr pos)
+      (* This branch is written somewhat strangely for the sake of better codegen. At the
+         time of writing, the OCaml compiler lays out forward branches such that the
+         [then] clause is the fallthrough path. According to the Intel optimization guide,
+         the static branch predictor predicts forward branches to be not taken, and
+         conditional branches that are never taken in a program consume no Branch Target
+         Buffer space. Hence we want the exception path to be in the [else] clause. *)
+      if t.length = length
+      then a_inv (Arr.unsafe_get arr pos)
+      else raise_mutation_during_iteration #()
     done;
     for pos = length to capacity - 1 do
       Arr.get_mono arr pos |> (out_of_range_invariant [@kind k])
@@ -690,6 +748,10 @@ let%template[@inline always]
                 , value_or_null & value_or_null & value_or_null
                 , immediate64_or_null & immediate64_or_null & immediate64_or_null
                 , value_or_null & value_or_null & value_or_null & value_or_null
+                , immediate64_or_null
+                  & immediate64_or_null
+                  & value_or_null
+                  & value_or_null
                 , immediate64_or_null
                   & immediate64_or_null
                   & immediate64_or_null
@@ -719,13 +781,20 @@ let%template[@inline always] [@kind bits64] unsafe_clear_pointer_at
 
 module Arr = Arr_impl
 
-let sort (type a) ?pos ?len t ~(compare : a -> a -> int) =
+let[@inline] sort (type a) ?pos ?len t ~(compare : a -> a -> int) =
+  let initial_length = length t in
+  let compare =
+    stack_
+      fun x y ->
+        let result = compare x y in
+        if t.length = initial_length then result else raise_mutation_during_iteration #()
+  in
   let compare : Obj.t -> Obj.t -> int = Obj.magic compare in
   (* [Uniform_array] checks this but has an overestimate of our length. *)
   let pos, len =
-    Ordered_collection_common.get_pos_len_exn () ?pos ?len ~total_length:(length t)
+    Ordered_collection_common.get_pos_len_exn () ?pos ?len ~total_length:initial_length
   in
-  Arr.sort ~pos ~len t.arr ~compare
+  Arr.sort ~pos ~len t.arr ~compare [@nontail]
 ;;
 
 module Expert = struct
